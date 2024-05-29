@@ -1,6 +1,6 @@
 # Internal Mesh Visualization
 
-This PHP application allows you to visualize the internal linking structure of a website using an export of outbound links from Screaming Frog.
+This JS/PHP application allows you to visualize the internal linking structure of a website using an export of outbound links from Screaming Frog.
 
 ## Features
 
