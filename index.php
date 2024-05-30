@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Visualisation des Cocons Sémantiques</title>
     <link rel="stylesheet" href="styles.css">
-    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="d3.v7.min.js"></script>
 </head>
 <body>
     <h1>Visualisation des Cocons Sémantiques</h1>
