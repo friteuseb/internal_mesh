@@ -1,0 +1,29 @@
+name: internal_mesh
+type: php
+docroot: .
+php_version: "8.0"
+webserver_type: nginx-fpm
+router_http_port: "80"
+router_https_port: "443"
+xdebug_enabled: true
+
+additional_hostnames: []
+additional_fqdns: []
+mariadb_version: "10.3"
+mysql_version: ""
+use_dns_when_possible: true
+composer_version: ""
+
+webimage:
+  extra_packages: []
+
+dbimage:
+  extra_packages: []
+
+dbaimage:
+  extra_packages: []
+
+# Comment the following lines to disable mutagen, which can improve
+# performance on Windows and macOS.
+#omit_containers: [db, dba]
+#mutagen_enabled: true

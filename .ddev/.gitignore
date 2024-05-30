@@ -1,0 +1,5 @@
+# Ignore everything in the .ddev folder
+.ddev/*
+# But keep the config.yaml and docker-compose.override.yaml
+!.ddev/config.yaml
+!.ddev/docker-compose.override.yaml
