@@ -3,3 +3,5 @@
 # But keep the config.yaml and docker-compose.override.yaml
 !.ddev/config.yaml
 !.ddev/docker-compose.override.yaml
+# Ignore filtered_data.json
+filtered_data.json

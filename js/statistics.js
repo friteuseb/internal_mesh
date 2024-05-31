@@ -1,172 +1,178 @@
+// statistics.js
 document.addEventListener("DOMContentLoaded", function() {
-    const statusDiv = document.getElementById('status');
+    loadStatistics();
 
-    loadDataAndRender();
-
-    function loadDataAndRender() {
+    function loadStatistics() {
         fetch('filtered_data.json')
             .then(response => response.json())
             .then(data => {
-                renderGraph(data.data); // Utiliser les données filtrées
-                statusDiv.innerHTML = 'Visualisation prête.';
+                if (Array.isArray(data.data)) {
+                    showStatistics(data.data);
+                } else {
+                    throw new Error("Les données chargées ne sont pas un tableau.");
+                }
             })
             .catch(error => {
-                statusDiv.innerHTML = 'Erreur lors du chargement des données: ' + error.message;
+                console.error('Erreur lors du chargement des données: ' + error.message);
             });
     }
 
-    function renderGraph(data) {
+    function showStatistics(data) {
         const nodes = {};
-        const links = data.map(d => {
+        data.forEach(d => {
             const source = getLastSegment(d.Source);
             const target = getLastSegment(d.Destination);
-            nodes[source] = nodes[source] || { name: source, url: d.Source, inDegree: 0, hidden: false, indexable: true };
-            nodes[target] = nodes[target] || { name: target, url: d.Destination, inDegree: 0, hidden: false, indexable: true };
-            nodes[target].inDegree += 1; // Count the number of incoming links
-            return { source: source, target: target };
+            nodes[source] = nodes[source] || { name: source, url: d.Source, inDegree: 0, outDegree: 0 };
+            nodes[target] = nodes[target] || { name: target, url: d.Destination, inDegree: 0, outDegree: 0 };
+            nodes[source].outDegree += 1;
+            nodes[target].inDegree += 1;
         });
 
-        calculateLevels(nodes, links);
+        const statisticsDiv = d3.select("#statistics");
+        statisticsDiv.html("");
 
-        const width = 1900, height = 1000;
+        const sortedNodes = Object.values(nodes).sort((a, b) => a.inDegree - b.inDegree);
+        const maxInDegree = d3.max(sortedNodes, d => d.inDegree);
+        const colorScale = d3.scaleSequential(d3.interpolateRdYlGn).domain([0, maxInDegree]);
 
-        d3.select("#graph").html("");  // Clear the existing graph
+        // Create search input and select/deselect all checkbox
+        const searchDiv = statisticsDiv.append("div").attr("class", "search-container");
+        searchDiv.append("input")
+            .attr("type", "text")
+            .attr("id", "search-input")
+            .attr("placeholder", "Rechercher...");
 
-        const svg = d3.select("#graph").append("svg")
-            .attr("width", width)
-            .attr("height", height)
-            .call(d3.zoom().on("zoom", (event) => {
-                svg.attr("transform", event.transform);
-            }))
-            .append("g");
+        searchDiv.append("input")
+            .attr("type", "checkbox")
+            .attr("id", "select-all-checkbox")
+            .text("Tout sélectionner");
 
-        const simulation = d3.forceSimulation(Object.values(nodes))
-            .force("link", d3.forceLink(links).id(d => d.name).distance(300))
-            .force("charge", d3.forceManyBody().strength(-500))
-            .force("center", d3.forceCenter(width / 2, height / 2))
-            .force("collide", d3.forceCollide().radius(d => Math.log(1 + d.inDegree) * 5));
+        const table = statisticsDiv.append("table");
+        const thead = table.append("thead");
+        const tbody = table.append("tbody");
 
-        const link = svg.append("g")
-            .attr("class", "links")
-            .selectAll("line")
-            .data(links)
-            .enter().append("line")
-            .attr("class", "link")
-            .style("stroke", d => {
-                const sourceDepth = nodes[d.source]?.depth || 0;
-                const targetDepth = nodes[d.target]?.depth || 0;
-                const depth = Math.max(sourceDepth, targetDepth);
-                return d3.interpolateViridis(depth / 5);
-            })
-            .style("stroke-width", 1)
-            .style("opacity", 0.5);
+        const columns = ["", "Page", "Liens entrants", "Liens sortants"];
+        let sortOrder = "asc";
 
-        const node = svg.append("g")
-            .attr("class", "nodes")
-            .selectAll("g")
-            .data(Object.values(nodes))
-            .enter().append("g")
-            .attr("class", "node")
-            .call(d3.drag()
-                .on("start", dragstarted)
-                .on("drag", dragged)
-                .on("end", dragended))
+        thead.append("tr")
+            .selectAll("th")
+            .data(columns)
+            .enter().append("th")
+            .text(d => d)
             .on("click", (event, d) => {
-                if (event.ctrlKey) {
-                    window.open(d.url, '_blank');
+                if (d !== "") {
+                    sortOrder = sortOrder === "asc" ? "desc" : "asc";
+                    sortTable(d, sortOrder);
+                }
+            });
+
+        const rows = tbody.selectAll("tr")
+            .data(sortedNodes)
+            .enter().append("tr");
+
+        rows.selectAll("td")
+            .data(d => [d.name, d.url, d.inDegree, d.outDegree])
+            .enter().append("td")
+            .html((d, i) => {
+                if (i === 0) {
+                    return `<input type="checkbox" class="delete-checkbox" data-node="${d}">`;
+                }
+                return d;
+            })
+            .style("background-color", (d, i) => {
+                if (i === 2) {
+                    return colorScale(d);
+                }
+                return null;
+            })
+            .style("color", (d, i) => {
+                if (i === 2) {
+                    return d3.lab(colorScale(d)).l < 50 ? "white" : "black";
+                }
+                return null;
+            });
+
+        statisticsDiv.append("button")
+            .attr("id", "delete-nodes")
+            .text("Supprimer")
+            .on("click", deleteNodes);
+
+        // Function to sort the table based on the selected column
+        function sortTable(column, order) {
+            rows.sort((a, b) => {
+                let comparison = 0;
+                switch (column) {
+                    case "Page":
+                        comparison = d3.ascending(a.url, b.url);
+                        break;
+                    case "Liens entrants":
+                        comparison = d3.ascending(a.inDegree, b.inDegree);
+                        break;
+                    case "Liens sortants":
+                        comparison = d3.ascending(a.outDegree, b.outDegree);
+                        break;
+                }
+                return order === "asc" ? comparison : -comparison;
+            });
+
+            rows.selectAll("td")
+                .data(d => [d.name, d.url, d.inDegree, d.outDegree])
+                .html((d, i) => {
+                    if (i === 0) {
+                        return `<input type="checkbox" class="delete-checkbox" data-node="${d}">`;
+                    }
+                    return d;
+                })
+                .style("background-color", (d, i) => {
+                    if (i === 2) {
+                        return colorScale(d);
+                    }
+                    return null;
+                })
+                .style("color", (d, i) => {
+                    if (i === 2) {
+                        return d3.lab(colorScale(d)).l < 50 ? "white" : "black";
+                    }
+                    return null;
+                });
+        }
+
+        function deleteNodes() {
+            const checkedNodes = Array.from(document.querySelectorAll(".delete-checkbox:checked")).map(cb => cb.value);
+            const updatedData = data.filter(d => !checkedNodes.includes(getLastSegment(d.Source)) && !checkedNodes.includes(getLastSegment(d.Destination)));
+            fetch('update_data.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ data: updatedData })
+            }).then(response => {
+                if (response.ok) {
+                    window.location.reload();
                 } else {
-                    toggleVisibility(d, nodes, links, link);
-                }
-            });
-
-        node.append("circle")
-            .attr("r", d => Math.log(1 + d.inDegree) * 5)
-            .style("fill", "lightgreen")
-            .style("stroke", "#000")
-            .style("stroke-width", 0.5);
-
-        node.append("text")
-            .attr("dy", ".35em")
-            .attr("text-anchor", "middle")
-            .text(d => getLastSegment(d.url))
-            .style("font-size", "8px");
-
-        const tooltip = d3.select("body").append("div")
-            .attr("class", "tooltip")
-            .style("opacity", 0);
-
-        node.on("mouseover", (event, d) => {
-            tooltip.transition()
-                .duration(200)
-                .style("opacity", .9)
-                .style("visibility", "visible");
-            tooltip.html(d.url)
-                .style("left", (event.pageX + 5) + "px")
-                .style("top", (event.pageY - 28) + "px");
-        })
-        .on("mouseout", () => {
-            tooltip.transition()
-                .duration(500)
-                .style("opacity", 0)
-                .style("visibility", "hidden");
-        });
-
-        simulation.on("tick", () => {
-            link
-                .attr("x1", d => d.source.x)
-                .attr("y1", d => d.source.y)
-                .attr("x2", d => d.target.x)
-                .attr("y2", d => d.target.y)
-                .style("opacity", d => (nodes[d.source]?.hidden || nodes[d.target]?.hidden) ? 0 : 0.5);
-
-            node.attr("transform", d => `translate(${d.x},${d.y})`);
-        });
-
-        function dragstarted(event, d) {
-            if (!event.active) simulation.alphaTarget(0.3).restart();
-            d.fx = d.x;
-            d.fy = d.y;
-        }
-
-        function dragged(event, d) {
-            d.fx = event.x;
-            d.fy = event.y;
-        }
-
-        function dragended(event, d) {
-            if (!event.active) simulation.alphaTarget(0);
-            d.fx = null;
-            d.fy = null;
-        }
-    }
-
-    function calculateLevels(nodes, links) {
-        const queue = [Object.keys(nodes)[0]];
-        nodes[queue[0]].depth = 0;
-        const visited = new Set(queue);
-
-        while (queue.length > 0) {
-            const name = queue.shift();
-            const depth = nodes[name].depth;
-
-            links.forEach(link => {
-                if (link.source === name && !visited.has(link.target)) {
-                    visited.add(link.target);
-                    nodes[link.target].depth = depth + 1;
-                    queue.push(link.target);
+                    console.error('Erreur lors de la mise à jour des données.');
                 }
             });
         }
-    }
 
-    function toggleVisibility(d, nodes, links, link) {
-        links.forEach(l => {
-            if (l.source.name === d.name) {
-                l.hidden = !l.hidden;
-            }
+        document.getElementById('go-to-statistics').addEventListener('click', () => {
+            document.getElementById('statistics').scrollIntoView({ behavior: 'smooth' });
         });
 
-        link.style("opacity", l => l.hidden ? 0 : 0.5);
+        document.getElementById('search-input').addEventListener('input', (event) => {
+            const searchTerm = event.target.value.toLowerCase();
+            rows.style('display', d => {
+                const match = d.url.toLowerCase().includes(searchTerm);
+                return match ? null : 'none';
+            });
+        });
+
+        document.getElementById('select-all-checkbox').addEventListener('change', (event) => {
+            const isChecked = event.target.checked;
+            document.querySelectorAll('.delete-checkbox').forEach(cb => {
+                cb.checked = isChecked;
+            });
+        });
     }
 
     function getLastSegment(url) {
