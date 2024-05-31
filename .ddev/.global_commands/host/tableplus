@@ -1,0 +1,32 @@
+#!/bin/bash
+
+#ddev-generated
+# Support for TablePlus, https://tableplus.com/
+# This command is available on macOS and WSL2 if TablePlus is installed in the default location.
+## Description: Run tableplus with current project database
+## Usage: tableplus
+## Example: "ddev tableplus"
+## OSTypes: darwin,wsl2
+## HostBinaryExists: /Applications/TablePlus.app,/mnt/c/Program Files/TablePlus/TablePlus.exe
+
+if [ "${DDEV_PROJECT_STATUS}" != "running" ]; then
+  echo "Project ${DDEV_PROJECT} is not running, starting it"
+  ddev start
+fi
+
+dbtype=${DDEV_DBIMAGE%:*}
+driver=mysql
+if [[ $dbtype == "postgres" ]]; then
+    driver=$dbtype
+fi
+query="${driver}://db:db@127.0.0.1:${DDEV_HOST_DB_PORT}/db?Enviroment=local&Name=ddev-${DDEV_SITENAME}"
+
+case $OSTYPE in
+  "linux-gnu")
+    "/mnt/c/Program Files/TablePlus/TablePlus.exe" $query >/dev/null &
+    ;;
+  "darwin"*)
+    set -x
+    open "$query" -a "/Applications/TablePlus.app/Contents/MacOS/TablePlus"
+    ;;
+esac

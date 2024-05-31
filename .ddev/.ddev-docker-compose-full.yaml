@@ -1,0 +1,227 @@
+name: ddev-internalink
+networks:
+    ddev_default:
+        external: true
+        name: ddev_default
+    default:
+        labels:
+            com.ddev.platform: ddev
+        name: ddev-internalink_default
+services:
+    db:
+        build:
+            args:
+                BASE_IMAGE: ddev/ddev-dbserver-mariadb-10.4:v1.22.7
+                gid: "1000"
+                uid: "1000"
+                username: cyril
+            context: /home/cyril/internal_mesh-1/.ddev/.dbimageBuild
+            dockerfile: Dockerfile
+        cap_add:
+            - SYS_NICE
+        command: []
+        container_name: ddev-internalink-db
+        environment:
+            COLUMNS: "158"
+            DDEV_DATABASE: mariadb:10.4
+            DDEV_DATABASE_FAMILY: mysql
+            DDEV_HOSTNAME: internalink.ddev.site
+            DDEV_PHP_VERSION: "8.2"
+            DDEV_PRIMARY_URL: https://internalink.ddev.site
+            DDEV_PROJECT: internalink
+            DDEV_PROJECT_TYPE: php
+            DDEV_ROUTER_HTTP_PORT: "80"
+            DDEV_ROUTER_HTTPS_PORT: "443"
+            DDEV_SITENAME: internalink
+            DDEV_TLD: ddev.site
+            DOCKER_IP: 127.0.0.1
+            GOARCH: amd64
+            GOOS: linux
+            HOST_DOCKER_INTERNAL_IP: ""
+            IS_DDEV_PROJECT: "true"
+            LINES: "39"
+            MYSQL_HISTFILE: /mnt/ddev-global-cache/mysqlhistory/internalink-db/mysql_history
+            MYSQL_PWD: db
+            PGDATABASE: db
+            PGHOST: 127.0.0.1
+            PGPASSWORD: db
+            PGUSER: db
+            POSTGRES_DB: db
+            POSTGRES_PASSWORD: db
+            POSTGRES_USER: db
+            TZ: ""
+            USER: cyril
+        healthcheck:
+            interval: 1s
+            retries: 120
+            start_interval: 1s
+            start_period: 2m0s
+            timeout: 1m10s
+        hostname: internalink-db
+        image: ddev/ddev-dbserver-mariadb-10.4:v1.22.7-internalink-built
+        labels:
+            com.ddev.app-type: php
+            com.ddev.approot: /home/cyril/internal_mesh-1
+            com.ddev.platform: ddev
+            com.ddev.site-name: internalink
+        networks:
+            ddev_default: null
+            default: null
+        ports:
+            - host_ip: 127.0.0.1
+              mode: ingress
+              protocol: tcp
+              target: 3306
+        restart: "no"
+        stop_grace_period: 1m0s
+        user: 1000:1000
+        volumes:
+            - source: database
+              target: /var/lib/mysql
+              type: volume
+              volume:
+                nocopy: true
+            - bind:
+                create_host_path: true
+              source: /home/cyril/internal_mesh-1/.ddev
+              target: /mnt/ddev_config
+              type: bind
+            - bind:
+                create_host_path: true
+              source: /home/cyril/internal_mesh-1/.ddev/db_snapshots
+              target: /mnt/snapshots
+              type: bind
+            - source: ddev-global-cache
+              target: /mnt/ddev-global-cache
+              type: volume
+              volume: {}
+        working_dir: /home/cyril
+    web:
+        build:
+            args:
+                BASE_IMAGE: ddev/ddev-webserver:v1.22.7
+                DDEV_PHP_VERSION: "8.2"
+                gid: "1000"
+                uid: "1000"
+                username: cyril
+            context: /home/cyril/internal_mesh-1/.ddev/.webimageBuild
+            dockerfile: Dockerfile
+        cap_add:
+            - SYS_PTRACE
+        command:
+            - /pre-start.sh
+        container_name: ddev-internalink-web
+        environment:
+            COLUMNS: "158"
+            DDEV_COMPOSER_ROOT: /var/www/html
+            DDEV_DATABASE: mariadb:10.4
+            DDEV_DATABASE_FAMILY: mysql
+            DDEV_DOCROOT: ""
+            DDEV_FILES_DIR: ""
+            DDEV_FILES_DIRS: ""
+            DDEV_HOSTNAME: internalink.ddev.site
+            DDEV_MUTAGEN_ENABLED: "false"
+            DDEV_PHP_VERSION: "8.2"
+            DDEV_PRIMARY_URL: https://internalink.ddev.site
+            DDEV_PROJECT: internalink
+            DDEV_PROJECT_TYPE: php
+            DDEV_ROUTER_HTTP_PORT: "80"
+            DDEV_ROUTER_HTTPS_PORT: "443"
+            DDEV_SITENAME: internalink
+            DDEV_TLD: ddev.site
+            DDEV_VERSION: v1.22.7
+            DDEV_WEB_ENTRYPOINT: /mnt/ddev_config/web-entrypoint.d
+            DDEV_WEBSERVER_TYPE: nginx-fpm
+            DDEV_XDEBUG_ENABLED: "false"
+            DEPLOY_NAME: local
+            DOCKER_IP: 127.0.0.1
+            DOCROOT: ""
+            DRUSH_ALLOW_XDEBUG: "1"
+            DRUSH_OPTIONS_URI: https://internalink.ddev.site
+            GOARCH: amd64
+            GOOS: linux
+            HOST_DOCKER_INTERNAL_IP: ""
+            HTTP_EXPOSE: 80:80,8025:8025
+            HTTPS_EXPOSE: 443:80,8026:8025
+            IS_DDEV_PROJECT: "true"
+            LINES: "39"
+            MYSQL_HISTFILE: /mnt/ddev-global-cache/mysqlhistory/internalink-web/mysql_history
+            MYSQL_PWD: db
+            NODE_EXTRA_CA_CERTS: /mnt/ddev-global-cache/mkcert/rootCA.pem
+            PGDATABASE: db
+            PGHOST: db
+            PGPASSWORD: db
+            PGUSER: db
+            PHP_IDE_CONFIG: serverName=internalink.ddev.site
+            SSH_AUTH_SOCK: /home/.ssh-agent/socket
+            TZ: ""
+            USER: cyril
+            VIRTUAL_HOST: internalink.ddev.site
+            npm_config_cache: /mnt/ddev-global-cache/npm
+        external_links:
+            - ddev-router:internalink.ddev.site
+        extra_hosts:
+            - host.docker.internal=host-gateway
+        healthcheck:
+            interval: 1s
+            retries: 120
+            start_interval: 1s
+            start_period: 2m0s
+            timeout: 1m10s
+        hostname: internalink-web
+        image: ddev/ddev-webserver:v1.22.7-internalink-built
+        labels:
+            com.ddev.app-type: php
+            com.ddev.approot: /home/cyril/internal_mesh-1
+            com.ddev.platform: ddev
+            com.ddev.site-name: internalink
+        networks:
+            ddev_default: null
+            default: null
+        ports:
+            - host_ip: 127.0.0.1
+              mode: ingress
+              protocol: tcp
+              target: 80
+            - host_ip: 127.0.0.1
+              mode: ingress
+              protocol: tcp
+              target: 443
+        restart: "no"
+        user: 1000:1000
+        volumes:
+            - consistency: cached
+              source: ../
+              target: /var/www/html
+              type: bind
+            - bind:
+                create_host_path: true
+              read_only: true
+              source: /home/cyril/internal_mesh-1/.ddev
+              target: /mnt/ddev_config
+              type: bind
+            - bind:
+                create_host_path: true
+              read_only: true
+              source: /home/cyril/internal_mesh-1/.ddev/xhprof
+              target: /usr/local/bin/xhprof
+              type: bind
+            - source: ddev-global-cache
+              target: /mnt/ddev-global-cache
+              type: volume
+              volume: {}
+            - source: ddev-ssh-agent_socket_dir
+              target: /home/.ssh-agent
+              type: volume
+              volume: {}
+        working_dir: /var/www/html/
+volumes:
+    database:
+        external: true
+        name: internalink-mariadb
+    ddev-global-cache:
+        external: true
+        name: ddev-global-cache
+    ddev-ssh-agent_socket_dir:
+        external: true
+        name: ddev-ssh-agent_socket_dir

@@ -1,0 +1,75 @@
+#!/bin/bash
+
+## #ddev-generated: If you want to edit and own this file, remove this line.
+## Description: Launch a browser with the current site
+## Usage: launch [path] [-m|--mailpit]
+## Example: "ddev launch" or "ddev launch /admin/reports/status/php" or "ddev launch phpinfo.php", for Mailpit "ddev launch -m"
+## Flags: [{"Name":"mailpit","Shorthand":"m","Usage":"ddev launch -m launches the mailpit UI"}]
+
+if [ "${DDEV_PROJECT_STATUS}" != "running" ]; then
+  echo "Project ${DDEV_PROJECT} is not running, starting it"
+  ddev start
+fi
+FULLURL=${DDEV_PRIMARY_URL}
+HTTPS=""
+if [ ${DDEV_PRIMARY_URL%://*} = "https" ]; then HTTPS=true; fi
+
+while :; do
+     case ${1:-} in
+         -p|--phpmyadmin)
+            echo "phpMyAdmin is no longer built into DDEV, please 'ddev get ddev/ddev-phpmyadmin' and use 'ddev phpmyadmin' to launch phpMyAdmin" && exit 2
+            ;;
+         -m|--mailpit|--mailhog)
+            if [[ ! -z "${GITPOD_INSTANCE_ID}" ]] || [[ "${CODESPACES}" == "true" ]]; then
+                FULLURL="${FULLURL/-${DDEV_HOST_WEBSERVER_PORT}/-${DDEV_HOST_MAILPIT_PORT}}"
+            else
+                if [ "${HTTPS}" = "" ]; then
+                    FULLURL="${FULLURL%:[0-9]*}:${DDEV_MAILPIT_PORT}"
+                else
+                    FULLURL="${FULLURL%:[0-9]*}:${DDEV_MAILPIT_HTTPS_PORT}"
+                fi
+            fi
+             ;;
+
+         --)              # End of all options.
+             shift
+             break
+             ;;
+         -?*)
+             printf 'WARN: Unknown option (ignored): %s\n' "$1" >&2
+             ;;
+         *)               # Default case: No more options, so break out of the loop.
+             break
+     esac
+
+     shift
+ done
+
+if [ -n "${1:-}" ] ; then
+  if [[ ${1::1} != "/" ]] ; then
+    FULLURL="${FULLURL}/";
+  fi
+
+  FULLURL="${FULLURL}${1}";
+fi
+
+if [ ! -z ${DDEV_DEBUG:-} ]; then
+    printf "FULLURL $FULLURL\n" && exit 0
+fi
+
+case $OSTYPE in
+  linux-gnu)
+    if [[ ! -z "${GITPOD_INSTANCE_ID}" ]]; then
+        gp preview ${FULLURL}
+    else
+        xdg-open ${FULLURL}
+    fi
+    ;;
+  "darwin"*)
+    open ${FULLURL}
+    ;;
+  "win*"* | "msys"*)
+    start ${FULLURL}
+    ;;
+esac
+
