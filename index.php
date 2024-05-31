@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Visualisation des Cocons Sémantiques</title>
     <link rel="stylesheet" href="styles.css">
-    <script src="d3.v7.min.js"></script>
+    <script src="/js/d3.v7.min.js"></script>
 </head>
 <body>
     <h1>Visualisation des Cocons Sémantiques</h1>
@@ -21,8 +21,8 @@
     </div>
     <div id="graph"></div>
     <div id="statistics"></div>
-    <script src="utils.js"></script>
-    <script src="graph.js"></script>
-    <script src="statistics.js"></script>
+    <script src="/js/utils.js"></script>
+    <script src="/js/graph.js"></script>
+    <script src="/js/statistics.js"></script>
 </body>
 </html>
