@@ -1,6 +1,12 @@
 <?php
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv-file'])) {
+$method = $_SERVER['REQUEST_METHOD'];
+
+if ($method === 'POST' && isset($_FILES['csv-file'])) {
     $csvFile = $_FILES['csv-file']['tmp_name'];
+    if (empty($csvFile)) {
+        die('Error: CSV file path is empty.');
+    }
+
     $data = array();
     $filteredData = array();
 
@@ -16,18 +22,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv-file'])) {
             return trim(preg_replace('/[\x{FEFF}\x{200B}]/u', '', $header), "\" \t\n\r\0\x0B");
         }, $headers);
 
-        // Afficher les en-têtes pour le débogage
-        echo '<pre>'; print_r($headers); echo '</pre>';
-
         // Indices des colonnes pertinentes
         $sourceIndex = array_search('Source', $headers);
         $destinationIndex = array_search('Destination', $headers);
         $statusCodeIndex = array_search('Status Code', $headers);
         $linkPositionIndex = array_search('Link Position', $headers);
         $linkTypeIndex = array_search('Type', $headers);
-
-        // Afficher les indices pour le débogage
-        echo "Indices trouvés: Source=$sourceIndex, Destination=$destinationIndex, Status Code=$statusCodeIndex, Link Position=$linkPositionIndex, Type=$linkTypeIndex<br>";
 
         // Vérification de l'existence des colonnes nécessaires
         if ($sourceIndex === FALSE) {
@@ -43,8 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv-file'])) {
             die('Colonne "Link Position" manquante dans le fichier CSV.');
         }
         if ($linkTypeIndex === FALSE) {
-            // Afficher les en-têtes pour vérification manuelle
-            die('Colonne "Type" manquante dans le fichier CSV. Voici les en-têtes détectées: ' . implode(', ', $headers));
+            die('Colonne "Type" manquante dans le fichier CSV.');
         }
 
         // Lire les lignes
@@ -72,11 +71,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv-file'])) {
         die('Erreur lors de l\'ouverture du fichier CSV.');
     }
 
-    // Vérifier les données filtrées avant de les enregistrer
-    if (empty($filteredData)) {
-        die('Aucune donnée filtrée trouvée.');
-    }
-
     // Enregistrer les données filtrées dans un fichier JSON
     $jsonFile = 'filtered_data.json';
     $jsonData = json_encode(array('data' => $filteredData));
@@ -89,7 +83,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv-file'])) {
     }
 
     // Rediriger vers la page de visualisation
-    header('Location: index.php');
+    header('Location: index.html');
+    exit();
+} elseif ($method === 'POST' && isset($_POST['remove_node'])) {
+    $nodeToRemove = $_POST['remove_node'];
+
+    $jsonFile = 'filtered_data.json';
+    if (!file_exists($jsonFile)) {
+        die('Erreur: fichier JSON non trouvé.');
+    }
+
+    $jsonData = json_decode(file_get_contents($jsonFile), true);
+    if ($jsonData === NULL) {
+        die('Erreur lors du décodage du fichier JSON.');
+    }
+
+    $filteredData = array_filter($jsonData['data'], function($link) use ($nodeToRemove) {
+        return $link['Source'] !== $nodeToRemove && $link['Destination'] !== $nodeToRemove;
+    });
+
+    $jsonData['data'] = array_values($filteredData);
+    if (file_put_contents($jsonFile, json_encode($jsonData)) === FALSE) {
+        die('Erreur lors de l\'écriture des données filtrées dans le fichier JSON.');
+    }
+
+    echo json_encode($jsonData);
+    exit();
+} elseif ($method === 'POST' && isset($_POST['remove_nodes'])) {
+    $nodesToRemove = json_decode($_POST['remove_nodes'], true);
+
+    $jsonFile = 'filtered_data.json';
+    if (!file_exists($jsonFile)) {
+        die('Erreur: fichier JSON non trouvé.');
+    }
+
+    $jsonData = json_decode(file_get_contents($jsonFile), true);
+    if ($jsonData === NULL) {
+        die('Erreur lors du décodage du fichier JSON.');
+    }
+
+    $filteredData = array_filter($jsonData['data'], function($link) use ($nodesToRemove) {
+        return !in_array($link['Source'], $nodesToRemove) && !in_array($link['Destination'], $nodesToRemove);
+    });
+
+    $jsonData['data'] = array_values($filteredData);
+    if (file_put_contents($jsonFile, json_encode($jsonData)) === FALSE) {
+        die('Erreur lors de l\'écriture des données filtrées dans le fichier JSON.');
+    }
+
+    echo json_encode($jsonData);
     exit();
 } else {
     // Afficher les données filtrées si elles existent

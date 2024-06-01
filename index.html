@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualisation du Maillage Interne</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <h1>Visualisation du Maillage Interne</h1>
+    <form action="data.php" method="post" enctype="multipart/form-data">
+        <input type="file" name="csv-file" accept=".csv" required class="styled-button">
+        <input type="submit" value="Télécharger et Traiter" class="styled-button">
+    </form>
+
+    <div id="chart-container">
+        <h2>Visualisation des Liens</h2>
+        <div id="chart" style="width:100%; height:500px;"></div>
+    </div>
+
+    <div id="table-container">
+        <h2>Tableau des Nœuds</h2>
+        <div class="search-container">
+            <input type="text" id="search" placeholder="Rechercher...">
+            <button id="select-all" class="styled-button">Tout Sélectionner</button>
+            <button id="delete-selected" class="styled-button">Supprimer Sélectionnés</button>
+        </div>
+        <table id="data-table">
+            <thead>
+                <tr>
+                    <th><input type="checkbox" id="select-all-checkbox"></th>
+                    <th data-sort="node">Nœud</th>
+                    <th data-sort="incoming">Liens Entrants</th>
+                    <th data-sort="outgoing">Liens Sortants</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <script src="js/script.js"></script>
+</body>
+</html>
