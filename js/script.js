@@ -122,7 +122,7 @@ fetch('data.php')
 
             // Fonction pour supprimer un nœud
             function removeNode(nodeId) {
-                fetch('data.php', {
+                return fetch('data.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                     body: `remove_node=${nodeId}`
@@ -134,18 +134,20 @@ fetch('data.php')
                 .catch(error => console.error('Erreur lors de la suppression du nœud:', error));
             }
 
-            // Fonction pour supprimer plusieurs nœuds
-            function removeNodes(nodeIds) {
-                fetch('data.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: `remove_nodes=${JSON.stringify(nodeIds)}`
-                })
-                .then(response => response.json())
-                .then(json => {
-                    updateGraph(json.data);
-                })
-                .catch(error => console.error('Erreur lors de la suppression des nœuds:', error));
+            // Fonction pour supprimer plusieurs nœuds en file d'attente
+            function removeNodesInQueue(nodeIds) {
+                let index = 0;
+
+                function next() {
+                    if (index < nodeIds.length) {
+                        removeNode(nodeIds[index]).then(() => {
+                            index++;
+                            next();
+                        });
+                    }
+                }
+
+                next();
             }
 
             // Fonction pour mettre à jour le tableau
@@ -205,80 +207,80 @@ fetch('data.php')
                 visibleRows.classed('selected', !isSelected);
                 visibleRows.selectAll('input[type="checkbox"]').property('checked', !isSelected);
                 visibleRows.style('background-color', !isSelected ? '#d3d3d3' : ''); // Changer la couleur de sélection
-        });
-
-        // Fonction pour supprimer les éléments sélectionnés
-        d3.select('#delete-selected').on('click', function() {
-            const selectedRows = tbody.selectAll('tr.selected').data();
-            const nodeIds = selectedRows.map(d => d.id);
-            removeNodes(nodeIds);
-        });
-
-        // Fonction de recherche
-        document.getElementById('search').addEventListener('input', function() {
-            const searchTerm = this.value.toLowerCase();
-            tbody.selectAll('tr').each(function() {
-                const row = d3.select(this);
-                const text = row.text().toLowerCase();
-                row.style('display', text.includes(searchTerm) ? '' : 'none');
             });
-        });
 
-        // Gestion des sélections avec Shift et Ctrl
-        let lastChecked = null;
-        tbody.selectAll('input[type="checkbox"]').on('click', function(event) {
-            const currentRow = d3.select(this.parentNode.parentNode);
-            if (!lastChecked) {
+            // Fonction pour supprimer les éléments sélectionnés
+            d3.select('#delete-selected').on('click', function() {
+                const selectedRows = tbody.selectAll('tr.selected').data();
+                const nodeIds = selectedRows.map(d => d.id);
+                removeNodesInQueue(nodeIds);
+            });
+
+            // Fonction de recherche
+            document.getElementById('search').addEventListener('input', function() {
+                const searchTerm = this.value.toLowerCase();
+                tbody.selectAll('tr').each(function() {
+                    const row = d3.select(this);
+                    const text = row.text().toLowerCase();
+                    row.style('display', text.includes(searchTerm) ? '' : 'none');
+                });
+            });
+
+            // Gestion des sélections avec Shift et Ctrl
+            let lastChecked = null;
+            tbody.selectAll('input[type="checkbox"]').on('click', function(event) {
+                const currentRow = d3.select(this.parentNode.parentNode);
+                if (!lastChecked) {
+                    lastChecked = this;
+                    return;
+                }
+
+                if (event.shiftKey) {
+                    const rows = Array.from(tbody.node().rows);
+                    const start = rows.indexOf(lastChecked.parentNode.parentNode);
+                    const end = rows.indexOf(currentRow.node());
+
+                    rows.slice(Math.min(start, end), Math.max(start, end) + 1)
+                        .forEach(row => {
+                            d3.select(row).classed('selected', this.checked);
+                            d3.select(row).select('input[type="checkbox"]').property('checked', this.checked);
+                            d3.select(row).style('background-color', this.checked ? '#d3d3d3' : '');
+                        });
+                } else if (event.ctrlKey || event.metaKey) {
+                    currentRow.classed('selected', this.checked);
+                    currentRow.style('background-color', this.checked ? '#d3d3d3' : '');
+                }
+
                 lastChecked = this;
-                return;
+            });
+        }
+
+        // Fonction de drag
+        function drag(simulation) {
+            function dragstarted(event, d) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
             }
 
-            if (event.shiftKey) {
-                const rows = Array.from(tbody.node().rows);
-                const start = rows.indexOf(lastChecked.parentNode.parentNode);
-                const end = rows.indexOf(currentRow.node());
-
-                rows.slice(Math.min(start, end), Math.max(start, end) + 1)
-                    .forEach(row => {
-                        d3.select(row).classed('selected', this.checked);
-                        d3.select(row).select('input[type="checkbox"]').property('checked', this.checked);
-                        d3.select(row).style('background-color', this.checked ? '#d3d3d3' : '');
-                    });
-            } else if (event.ctrlKey || event.metaKey) {
-                currentRow.classed('selected', this.checked);
-                currentRow.style('background-color', this.checked ? '#d3d3d3' : '');
+            function dragged(event, d) {
+                d.fx = event.x;
+                d.fy = event.y;
             }
 
-            lastChecked = this;
-        });
-    }
+            function dragended(event, d) {
+                if (!event.active) simulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            }
 
-    // Fonction de drag
-    function drag(simulation) {
-        function dragstarted(event, d) {
-            if (!event.active) simulation.alphaTarget(0.3).restart();
-            d.fx = d.x;
-            d.fy = d.y;
+            return d3.drag()
+                .on('start', dragstarted)
+                .on('drag', dragged)
+                .on('end', dragended);
         }
 
-        function dragged(event, d) {
-            d.fx = event.x;
-            d.fy = event.y;
-        }
-
-        function dragended(event, d) {
-            if (!event.active) simulation.alphaTarget(0);
-            d.fx = null;
-            d.fy = null;
-        }
-
-        return d3.drag()
-            .on('start', dragstarted)
-            .on('drag', dragged)
-            .on('end', dragended);
-    }
-
-    // Initial update
-    updateGraph(data);
-})
-.catch(error => console.error('Erreur lors du chargement des données:', error));
+        // Initial update
+        updateGraph(data);
+    })
+    .catch(error => console.error('Erreur lors du chargement des données:', error));

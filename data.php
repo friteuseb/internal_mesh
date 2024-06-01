@@ -1,10 +1,30 @@
 <?php
+function sendJsonResponse($data, $httpStatusCode = 200) {
+    header('Content-Type: application/json');
+    http_response_code($httpStatusCode);
+    echo json_encode($data);
+    exit();
+}
+
+function handleError($errno, $errstr, $errfile, $errline) {
+    $error = [
+        'error' => [
+            'message' => $errstr,
+            'file' => $errfile,
+            'line' => $errline
+        ]
+    ];
+    sendJsonResponse($error, 500);
+}
+
+set_error_handler('handleError');
+
 $method = $_SERVER['REQUEST_METHOD'];
 
 if ($method === 'POST' && isset($_FILES['csv-file'])) {
     $csvFile = $_FILES['csv-file']['tmp_name'];
     if (empty($csvFile)) {
-        die('Error: CSV file path is empty.');
+        sendJsonResponse(['error' => 'Error: CSV file path is empty.'], 400);
     }
 
     $data = array();
@@ -14,7 +34,7 @@ if ($method === 'POST' && isset($_FILES['csv-file'])) {
         // Lire les en-têtes et supprimer le BOM s'il existe
         $headers = fgetcsv($handle, 1000, ',');
         if ($headers === FALSE) {
-            die('Erreur lors de la lecture des en-têtes du fichier CSV.');
+            sendJsonResponse(['error' => 'Erreur lors de la lecture des en-têtes du fichier CSV.'], 400);
         }
 
         // Supprimer le BOM du premier en-tête si présent et trim les guillemets
@@ -31,19 +51,19 @@ if ($method === 'POST' && isset($_FILES['csv-file'])) {
 
         // Vérification de l'existence des colonnes nécessaires
         if ($sourceIndex === FALSE) {
-            die('Colonne "Source" manquante dans le fichier CSV.');
+            sendJsonResponse(['error' => 'Colonne "Source" manquante dans le fichier CSV.'], 400);
         }
         if ($destinationIndex === FALSE) {
-            die('Colonne "Destination" manquante dans le fichier CSV.');
+            sendJsonResponse(['error' => 'Colonne "Destination" manquante dans le fichier CSV.'], 400);
         }
         if ($statusCodeIndex === FALSE) {
-            die('Colonne "Status Code" manquante dans le fichier CSV.');
+            sendJsonResponse(['error' => 'Colonne "Status Code" manquante dans le fichier CSV.'], 400);
         }
         if ($linkPositionIndex === FALSE) {
-            die('Colonne "Link Position" manquante dans le fichier CSV.');
+            sendJsonResponse(['error' => 'Colonne "Link Position" manquante dans le fichier CSV.'], 400);
         }
         if ($linkTypeIndex === FALSE) {
-            die('Colonne "Type" manquante dans le fichier CSV.');
+            sendJsonResponse(['error' => 'Colonne "Type" manquante dans le fichier CSV.'], 400);
         }
 
         // Lire les lignes
@@ -68,18 +88,18 @@ if ($method === 'POST' && isset($_FILES['csv-file'])) {
         }
         fclose($handle);
     } else {
-        die('Erreur lors de l\'ouverture du fichier CSV.');
+        sendJsonResponse(['error' => 'Erreur lors de l\'ouverture du fichier CSV.'], 400);
     }
 
     // Enregistrer les données filtrées dans un fichier JSON
     $jsonFile = 'filtered_data.json';
     $jsonData = json_encode(array('data' => $filteredData));
     if ($jsonData === FALSE) {
-        die('Erreur lors de l\'encodage JSON des données filtrées.');
+        sendJsonResponse(['error' => 'Erreur lors de l\'encodage JSON des données filtrées.'], 500);
     }
 
     if (file_put_contents($jsonFile, $jsonData) === FALSE) {
-        die('Erreur lors de l\'écriture des données filtrées dans le fichier JSON.');
+        sendJsonResponse(['error' => 'Erreur lors de l\'écriture des données filtrées dans le fichier JSON.'], 500);
     }
 
     // Rediriger vers la page de visualisation
@@ -90,12 +110,12 @@ if ($method === 'POST' && isset($_FILES['csv-file'])) {
 
     $jsonFile = 'filtered_data.json';
     if (!file_exists($jsonFile)) {
-        die('Erreur: fichier JSON non trouvé.');
+        sendJsonResponse(['error' => 'Erreur: fichier JSON non trouvé.'], 404);
     }
 
     $jsonData = json_decode(file_get_contents($jsonFile), true);
     if ($jsonData === NULL) {
-        die('Erreur lors du décodage du fichier JSON.');
+        sendJsonResponse(['error' => 'Erreur lors du décodage du fichier JSON.'], 500);
     }
 
     $filteredData = array_filter($jsonData['data'], function($link) use ($nodeToRemove) {
@@ -104,22 +124,21 @@ if ($method === 'POST' && isset($_FILES['csv-file'])) {
 
     $jsonData['data'] = array_values($filteredData);
     if (file_put_contents($jsonFile, json_encode($jsonData)) === FALSE) {
-        die('Erreur lors de l\'écriture des données filtrées dans le fichier JSON.');
+        sendJsonResponse(['error' => 'Erreur lors de l\'écriture des données filtrées dans le fichier JSON.'], 500);
     }
 
-    echo json_encode($jsonData);
-    exit();
+    sendJsonResponse($jsonData);
 } elseif ($method === 'POST' && isset($_POST['remove_nodes'])) {
     $nodesToRemove = json_decode($_POST['remove_nodes'], true);
 
     $jsonFile = 'filtered_data.json';
     if (!file_exists($jsonFile)) {
-        die('Erreur: fichier JSON non trouvé.');
+        sendJsonResponse(['error' => 'Erreur: fichier JSON non trouvé.'], 404);
     }
 
     $jsonData = json_decode(file_get_contents($jsonFile), true);
     if ($jsonData === NULL) {
-        die('Erreur lors du décodage du fichier JSON.');
+        sendJsonResponse(['error' => 'Erreur lors du décodage du fichier JSON.'], 500);
     }
 
     $filteredData = array_filter($jsonData['data'], function($link) use ($nodesToRemove) {
@@ -128,18 +147,17 @@ if ($method === 'POST' && isset($_FILES['csv-file'])) {
 
     $jsonData['data'] = array_values($filteredData);
     if (file_put_contents($jsonFile, json_encode($jsonData)) === FALSE) {
-        die('Erreur lors de l\'écriture des données filtrées dans le fichier JSON.');
+        sendJsonResponse(['error' => 'Erreur lors de l\'écriture des données filtrées dans le fichier JSON.'], 500);
     }
 
-    echo json_encode($jsonData);
-    exit();
+    sendJsonResponse($jsonData);
 } else {
     // Afficher les données filtrées si elles existent
     if (file_exists('filtered_data.json')) {
         $jsonData = file_get_contents('filtered_data.json');
         echo $jsonData;
     } else {
-        echo json_encode(array('data' => array()));
+        sendJsonResponse(['data' => array()]);
     }
 }
 ?>
