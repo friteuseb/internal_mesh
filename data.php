@@ -42,12 +42,23 @@ if ($method === 'POST' && isset($_FILES['csv-file'])) {
             return trim(preg_replace('/[\x{FEFF}\x{200B}]/u', '', $header), "\" \t\n\r\0\x0B");
         }, $headers);
 
+        // Fonction pour rechercher des indices de colonnes avec des alias
+        function findColumnIndex($aliases, $headers) {
+            foreach ($aliases as $alias) {
+                $index = array_search($alias, $headers);
+                if ($index !== FALSE) {
+                    return $index;
+                }
+            }
+            return FALSE;
+        }
+
         // Indices des colonnes pertinentes
-        $sourceIndex = array_search('Source', $headers);
-        $destinationIndex = array_search('Destination', $headers);
-        $statusCodeIndex = array_search('Status Code', $headers);
-        $linkPositionIndex = array_search('Link Position', $headers);
-        $linkTypeIndex = array_search('Type', $headers);
+        $sourceIndex = findColumnIndex(['Source', 'Source'], $headers);
+        $destinationIndex = findColumnIndex(['Destination', 'Destination'], $headers);
+        $statusCodeIndex = findColumnIndex(['Status Code', 'Code de statut'], $headers);
+        $linkPositionIndex = findColumnIndex(['Link Position', 'Position du lien'], $headers);
+        $linkTypeIndex = findColumnIndex(['Type', 'Type'], $headers);
 
         // Vérification de l'existence des colonnes nécessaires
         if ($sourceIndex === FALSE) {
@@ -161,3 +172,4 @@ if ($method === 'POST' && isset($_FILES['csv-file'])) {
     }
 }
 ?>
+
