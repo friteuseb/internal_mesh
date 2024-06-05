@@ -19,6 +19,18 @@ function handleError($errno, $errstr, $errfile, $errline) {
 
 set_error_handler('handleError');
 
+// Fonction pour générer un identifiant unique
+function generateUUID() {
+    return sprintf(
+        '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+        mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+        mt_rand(0, 0xffff),
+        mt_rand(0, 0x0fff) | 0x4000,
+        mt_rand(0, 0x3fff) | 0x8000,
+        mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+    );
+}
+
 $method = $_SERVER['REQUEST_METHOD'];
 
 if ($method === 'POST' && isset($_FILES['csv-file'])) {
@@ -42,39 +54,16 @@ if ($method === 'POST' && isset($_FILES['csv-file'])) {
             return trim(preg_replace('/[\x{FEFF}\x{200B}]/u', '', $header), "\" \t\n\r\0\x0B");
         }, $headers);
 
-        // Fonction pour rechercher des indices de colonnes avec des alias
-        function findColumnIndex($aliases, $headers) {
-            foreach ($aliases as $alias) {
-                $index = array_search($alias, $headers);
-                if ($index !== FALSE) {
-                    return $index;
-                }
-            }
-            return FALSE;
-        }
-
         // Indices des colonnes pertinentes
-        $sourceIndex = findColumnIndex(['Source', 'Source'], $headers);
-        $destinationIndex = findColumnIndex(['Destination', 'Destination'], $headers);
-        $statusCodeIndex = findColumnIndex(['Status Code', 'Code de statut'], $headers);
-        $linkPositionIndex = findColumnIndex(['Link Position', 'Position du lien'], $headers);
-        $linkTypeIndex = findColumnIndex(['Type', 'Type'], $headers);
+        $sourceIndex = array_search('Source', $headers);
+        $destinationIndex = array_search('Destination', $headers);
+        $statusCodeIndex = array_search('Status Code', $headers);
+        $linkPositionIndex = array_search('Link Position', $headers);
+        $linkTypeIndex = array_search('Type', $headers);
 
         // Vérification de l'existence des colonnes nécessaires
-        if ($sourceIndex === FALSE) {
-            sendJsonResponse(['error' => 'Colonne "Source" manquante dans le fichier CSV.'], 400);
-        }
-        if ($destinationIndex === FALSE) {
-            sendJsonResponse(['error' => 'Colonne "Destination" manquante dans le fichier CSV.'], 400);
-        }
-        if ($statusCodeIndex === FALSE) {
-            sendJsonResponse(['error' => 'Colonne "Status Code" manquante dans le fichier CSV.'], 400);
-        }
-        if ($linkPositionIndex === FALSE) {
-            sendJsonResponse(['error' => 'Colonne "Link Position" manquante dans le fichier CSV.'], 400);
-        }
-        if ($linkTypeIndex === FALSE) {
-            sendJsonResponse(['error' => 'Colonne "Type" manquante dans le fichier CSV.'], 400);
+        if ($sourceIndex === FALSE || $destinationIndex === FALSE || $statusCodeIndex === FALSE || $linkPositionIndex === FALSE || $linkTypeIndex === FALSE) {
+            sendJsonResponse(['error' => 'Veuillez réaliser l\'export en anglais.'], 400);
         }
 
         // Lire les lignes
@@ -92,6 +81,7 @@ if ($method === 'POST' && isset($_FILES['csv-file'])) {
             // Appliquer les filtres
             if ($linkType === 'Hyperlink' && $statusCode == '200' && $linkPosition === 'Content') {
                 $filteredData[] = array(
+                    'id' => generateUUID(), // Ajouter un identifiant unique
                     'Source' => $source,
                     'Destination' => $destination
                 );
@@ -113,9 +103,8 @@ if ($method === 'POST' && isset($_FILES['csv-file'])) {
         sendJsonResponse(['error' => 'Erreur lors de l\'écriture des données filtrées dans le fichier JSON.'], 500);
     }
 
-    // Rediriger vers la page de visualisation
-    header('Location: index.html');
-    exit();
+    // Retourner les données filtrées en JSON
+    sendJsonResponse(['message' => 'Fichier traité avec succès', 'data' => $filteredData]);
 } elseif ($method === 'POST' && isset($_POST['remove_node'])) {
     $nodeToRemove = $_POST['remove_node'];
 
@@ -130,7 +119,7 @@ if ($method === 'POST' && isset($_FILES['csv-file'])) {
     }
 
     $filteredData = array_filter($jsonData['data'], function($link) use ($nodeToRemove) {
-        return $link['Source'] !== $nodeToRemove && $link['Destination'] !== $nodeToRemove;
+        return $link['id'] !== $nodeToRemove;
     });
 
     $jsonData['data'] = array_values($filteredData);
@@ -147,13 +136,18 @@ if ($method === 'POST' && isset($_FILES['csv-file'])) {
         sendJsonResponse(['error' => 'Erreur: fichier JSON non trouvé.'], 404);
     }
 
-    $jsonData = json_decode(file_get_contents($jsonFile), true);
+    $jsonData = file_get_contents($jsonFile);
+    if ($jsonData === FALSE) {
+        sendJsonResponse(['error' => 'Erreur lors de la lecture du fichier JSON.'], 500);
+    }
+
+    $jsonData = json_decode($jsonData, true);
     if ($jsonData === NULL) {
         sendJsonResponse(['error' => 'Erreur lors du décodage du fichier JSON.'], 500);
     }
 
     $filteredData = array_filter($jsonData['data'], function($link) use ($nodesToRemove) {
-        return !in_array($link['Source'], $nodesToRemove) && !in_array($link['Destination'], $nodesToRemove);
+        return !in_array($link['id'], $nodesToRemove);
     });
 
     $jsonData['data'] = array_values($filteredData);
@@ -166,10 +160,18 @@ if ($method === 'POST' && isset($_FILES['csv-file'])) {
     // Afficher les données filtrées si elles existent
     if (file_exists('filtered_data.json')) {
         $jsonData = file_get_contents('filtered_data.json');
-        echo $jsonData;
+        if ($jsonData === FALSE) {
+            sendJsonResponse(['error' => 'Erreur lors de la lecture du fichier JSON.'], 500);
+        }
+
+        $jsonData = json_decode($jsonData, true);
+        if ($jsonData === NULL) {
+            sendJsonResponse(['error' => 'Erreur lors du décodage du fichier JSON.'], 500);
+        }
+
+        sendJsonResponse($jsonData);
     } else {
         sendJsonResponse(['data' => array()]);
     }
 }
 ?>
-
