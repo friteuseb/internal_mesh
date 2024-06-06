@@ -193,4 +193,61 @@ export function updateGraph(data) {
         collisionRadius = +event.target.value;
         updateGraph(currentData);
     });
+
+    // Add event listener for PDF generation
+    document.getElementById('download-pdf').addEventListener('click', generatePDF);
 }
+
+function generatePDF() {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF();
+
+    // Appliquer les styles PDF
+    document.body.classList.add('pdf-style');
+
+    // Capture the chart with a fixed width and height
+    html2canvas(document.getElementById('chart'), {backgroundColor: '#ffffff', width: 800, height: 400}).then(canvas => {
+        const chartImg = canvas.toDataURL('image/png');
+        pdf.addImage(chartImg, 'PNG', 10, 10, 190, 100); // Adjust dimensions as needed
+
+        // Capture the table with a fixed width
+        html2canvas(document.getElementById('table-container'), {backgroundColor: '#ffffff', width: 800}).then(canvas => {
+            const tableImg = canvas.toDataURL('image/png');
+            pdf.addPage();
+            pdf.addImage(tableImg, 'PNG', 10, 10, 190, 250); // Adjust dimensions as needed
+
+            // Save the PDF
+            pdf.save('analysis.pdf');
+
+            // Remove PDF styles after capturing
+            document.body.classList.remove('pdf-style');
+        }).catch(error => {
+            console.error('Erreur lors de la capture du tableau pour le PDF:', error);
+            document.body.classList.remove('pdf-style'); // Remove PDF styles in case of error
+        });
+    }).catch(error => {
+        console.error('Erreur lors de la capture de la visualisation pour le PDF:', error);
+        document.body.classList.remove('pdf-style'); // Remove PDF styles in case of error
+    });
+}
+// tout supprimer pour effacer les traces après utilisation
+document.getElementById('clear-all').addEventListener('click', () => {
+    if (confirm('Êtes-vous sûr de vouloir tout effacer ?')) {
+        fetch('data.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'clear_all=true'
+        })
+        .then(response => response.json())
+        .then(json => {
+            if (json.success) {
+                alert('Tous les nœuds ont été effacés.');
+                updateGraph([]);
+            } else {
+                alert('Erreur lors de la suppression des nœuds.');
+            }
+        })
+        .catch(error => console.error('Erreur lors de la suppression des nœuds:', error));
+    }
+});
+

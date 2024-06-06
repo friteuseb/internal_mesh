@@ -145,6 +145,8 @@ th, td {
     padding: 10px;
     text-align: left;
     border-bottom: 1px solid #00d4ff;
+    color: #f0f0f0;
+    background-color: #1e1e1e;
 }
 
 th {
@@ -155,11 +157,6 @@ th {
 
 th[data-sort]:hover {
     background-color: #2e2e2e;
-}
-
-td {
-    background-color: #1e1e1e;
-    color: #f0f0f0;
 }
 
 td[data-type="incoming"] {
@@ -200,4 +197,54 @@ button:disabled {
     .search-container input {
         width: 60%;
     }
+}
+
+/* Style pour le rendu PDF */
+.pdf-style {
+    background-color: #ffffff !important; /* Fond blanc */
+    color: #000000 !important; /* Texte noir */
+}
+
+.pdf-style #chart {
+    border: 1px solid #000000 !important; /* Bordure noire */
+    width: 800px !important; /* Fix width for PDF capture */
+    height: 400px !important; /* Fix height for PDF capture */
+}
+
+.pdf-style table {
+    border-collapse: collapse;
+    width: 800px !important; /* Fix width for PDF capture */
+}
+
+.pdf-style th, .pdf-style td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #000000 !important; /* Bordure noire */
+    color: #000000 !important; /* Texte noir */
+    background-color: #ffffff !important; /* Fond blanc */
+}
+
+.pdf-style th {
+    background-color: #f1f1f1 !important; /* Fond gris clair */
+}
+
+.pdf-style td[data-type="incoming"] {
+    background-color: #d3d3d3 !important; /* Gris clair pour les liens entrants */
+}
+
+.pdf-style td[data-type="outgoing"] {
+    background-color: #d3d3d3 !important; /* Gris clair pour les liens sortants */
+}
+
+.pdf-style tr:nth-child(even) td {
+    background-color: #e9e9e9 !important; /* Gris clair pour les lignes paires */
+}
+
+.pdf-style tr:hover td {
+    background-color: #cccccc !important; /* Gris clair pour le survol */
+}
+
+.pdf-style .selected {
+    background-color: #000000 !important; /* Fond noir pour les lignes sélectionnées */
+    color: #ffffff !important; /* Texte blanc pour les lignes sélectionnées */
 }

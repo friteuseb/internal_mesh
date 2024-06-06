@@ -105,6 +105,17 @@ if ($method === 'POST' && isset($_FILES['csv-file'])) {
 
     // Retourner les données filtrées en JSON
     sendJsonResponse(['message' => 'Fichier traité avec succès', 'data' => $filteredData]);
+} elseif ($method === 'POST' && isset($_POST['clear_all'])) {
+    $jsonFile = 'filtered_data.json';
+    if (file_exists($jsonFile)) {
+        if (unlink($jsonFile)) {
+            sendJsonResponse(['success' => true, 'message' => 'Fichier JSON supprimé avec succès.']);
+        } else {
+            sendJsonResponse(['error' => 'Erreur lors de la suppression du fichier JSON.'], 500);
+        }
+    } else {
+        sendJsonResponse(['error' => 'Erreur: fichier JSON non trouvé.'], 404);
+    }
 } elseif ($method === 'POST' && isset($_POST['remove_node'])) {
     $nodeToRemove = $_POST['remove_node'];
 
@@ -174,4 +185,3 @@ if ($method === 'POST' && isset($_FILES['csv-file'])) {
         sendJsonResponse(['data' => array()]);
     }
 }
-?>

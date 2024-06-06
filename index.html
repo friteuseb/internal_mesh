@@ -42,6 +42,7 @@
                 <input type="text" id="search" placeholder="Rechercher...">
                 <button id="select-all" class="styled-button">Tout Sélectionner</button>
                 <button id="delete-selected" class="styled-button">Supprimer Sélectionnés</button>
+                <button id="clear-all" class="styled-button">Tout Effacer</button> <!-- Nouveau bouton -->
             </div>
             <table id="data-table">
                 <thead>
@@ -55,9 +56,12 @@
                 <tbody></tbody>
             </table>
         </div>
+        <button id="download-pdf" class="styled-button">Télécharger PDF</button>
     </div>
     <!-- Ajout de la bibliothèque D3.js -->
     <script src="https://d3js.org/d3.v6.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.3.2/html2canvas.min.js"></script>
     <script type="module" src="js/formHandler.js"></script>
     <script type="module" src="js/graphHandler.js"></script>
     <script type="module" src="js/nodeHandler.js"></script>
