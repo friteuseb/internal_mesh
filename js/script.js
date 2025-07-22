@@ -1,4 +1,4 @@
-import { updateGraph, displayMetrics, displayThemes, displaySuggestions } from './graphHandler.js';
+import { updateGraph, displayMetrics } from './graphHandler.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     fetch('data.php')
@@ -7,17 +7,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (json.error) {
                 throw new Error(json.error);
             }
-            updateGraph(json.data || [], json.themes || {}, json.metrics?.orphan_pages || [], json.metrics?.suggestions || []);
+            updateGraph(json.data || [], {}, json.metrics?.orphan_pages || []);
             displayMetrics(json.metrics || null);
-            displayThemes(json.themes || {});
-            displaySuggestions(json.metrics?.suggestions || []);
         })
         .catch(error => {
             console.error('Error fetching initial data:', error);
             // Initialiser avec des données vides si aucun fichier n'existe
-            updateGraph([], {}, [], []);
+            updateGraph([], {}, []);
             displayMetrics(null);
-            displayThemes({});
-            displaySuggestions([]);
         });
 });

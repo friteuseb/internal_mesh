@@ -62,8 +62,7 @@ h1 {
 }
 
 #chart-container {
-    width: 95%;
-    max-width: 1400px;
+    width: 100%;
     margin-bottom: 30px;
 }
 
@@ -79,6 +78,7 @@ h1 {
     box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
     height: 80vh;
     min-height: 600px;
+    width: 100%;
     position: relative;
     cursor: grab;
 }
@@ -427,21 +427,29 @@ button:disabled {
     background: #1e1e1e;
     border: 1px solid #00d4ff;
     border-radius: 5px;
-    padding: 5px 0;
+    padding: 8px 0;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.8);
     z-index: 1000;
     display: none;
+    min-width: 180px;
+    white-space: nowrap;
+    pointer-events: auto;
+    overflow: visible;
+    max-height: none;
 }
 
 .context-menu-item {
-    padding: 8px 16px;
+    display: block;
+    padding: 10px 16px;
     color: #f0f0f0;
     cursor: pointer;
     font-size: 14px;
     border: none;
-    background: none;
+    background: #1e1e1e;
     width: 100%;
     text-align: left;
+    box-sizing: border-box;
+    transition: background-color 0.2s;
 }
 
 .context-menu-item:hover {
@@ -452,7 +460,23 @@ button:disabled {
 .context-menu-divider {
     height: 1px;
     background: #444;
-    margin: 5px 0;
+    margin: 8px 0;
+    display: block;
+    width: 100%;
+    border: none;
+}
+
+/* S'assurer que tous les éléments du menu sont bien contenus */
+.context-menu * {
+    box-sizing: border-box;
+}
+
+.context-menu-item:first-child {
+    border-radius: 5px 5px 0 0;
+}
+
+.context-menu-item:last-child {
+    border-radius: 0 0 5px 5px;
 }
 
 /* Notifications */
@@ -626,4 +650,19 @@ button:disabled {
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+}
+
+/* Styles pour les détails d'erreur */
+.error-details {
+    text-align: left;
+    line-height: 1.5;
+}
+
+.error-details strong {
+    color: #ff6b6b;
+}
+
+.error-details ul {
+    margin: 10px 0;
+    padding-left: 20px;
 }

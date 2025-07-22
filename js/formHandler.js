@@ -1,4 +1,4 @@
-import { updateGraph, displayMetrics, displayThemes, displaySuggestions } from './graphHandler.js';
+import { updateGraph, displayMetrics } from './graphHandler.js';
 
 document.getElementById('upload-form').addEventListener('submit', function(event) {
     event.preventDefault();
@@ -39,19 +39,57 @@ document.getElementById('upload-form').addEventListener('submit', function(event
     submitButton.value = 'Traitement en cours...';
     progressContainer.classList.remove('hidden');
     
-    // Simulation de progression initiale
+    // Simulation de progression plus réaliste
     let progress = 0;
+    let progressStage = 'upload';
+    const startTime = Date.now();
+    
     const progressInterval = setInterval(() => {
-        progress += Math.random() * 20;
-        if (progress > 90) progress = 90;
+        const elapsed = (Date.now() - startTime) / 1000; // secondes écoulées
+        
+        // Progression différentielle selon la phase
+        if (progress < 30) {
+            // Phase upload - rapide pour petits fichiers, plus lente pour gros
+            const uploadSpeed = fileSizeMB > 100 ? 2 : 8;
+            progress += Math.random() * uploadSpeed;
+            progressStage = 'upload';
+        } else if (progress < 70) {
+            // Phase traitement - plus lente
+            progress += Math.random() * 3;
+            progressStage = 'processing';
+        } else if (progress < 92) {
+            // Phase finale - très lente pour ne pas dépasser
+            progress += Math.random() * 1.5;
+            progressStage = 'finalizing';
+        }
+        
+        // Ne jamais dépasser 92% avant la réponse serveur
+        if (progress > 92) progress = 92;
+        
         progressFill.style.width = progress + '%';
         
+        // Messages selon la phase et la taille
+        let message = '';
         if (fileSizeMB > 100) {
-            progressText.textContent = `Traitement d'un gros fichier (${fileSizeMB.toFixed(1)} MB)... ${Math.round(progress)}%`;
+            const messages = {
+                'upload': `📤 Upload du gros fichier (${fileSizeMB.toFixed(1)} MB)...`,
+                'processing': `⚙️ Traitement des données (${Math.round(elapsed)}s)...`,
+                'finalizing': `🔄 Finalisation de l'analyse...`
+            };
+            message = messages[progressStage];
+        } else if (fileSizeMB > 50) {
+            const messages = {
+                'upload': `📤 Upload en cours...`,
+                'processing': `⚙️ Analyse du fichier (${fileSizeMB.toFixed(1)} MB)...`,
+                'finalizing': `🔄 Génération des résultats...`
+            };
+            message = messages[progressStage];
         } else {
-            progressText.textContent = `Analyse en cours... ${Math.round(progress)}%`;
+            message = `Analyse en cours...`;
         }
-    }, 500);
+        
+        progressText.textContent = `${message} ${Math.round(progress)}%`;
+    }, 800); // Ralenti pour plus de réalisme
 
     // Ajouter les données des filtres
     const contentOnly = document.getElementById('content-only').checked;
@@ -71,11 +109,33 @@ document.getElementById('upload-form').addEventListener('submit', function(event
         .filter(s => s.length > 0);
     formData.append('excluded_selectors', JSON.stringify(excludedSelectors));
 
-    // Timeout spécial pour gros fichiers
-    const timeoutMs = fileSizeMB > 50 ? 300000 : 120000; // 5min pour gros fichiers, 2min sinon
+    // Timeout spécial pour gros fichiers avec avertissement intermédiaire
+    const timeoutMs = fileSizeMB > 100 ? 600000 : (fileSizeMB > 50 ? 300000 : 120000); // 10min pour très gros, 5min pour gros, 2min normal
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    let timeoutWarningShown = false;
+    
+    // Avertissement à mi-parcours du timeout
+    const warningTimeoutId = setTimeout(() => {
+        if (!timeoutWarningShown) {
+            timeoutWarningShown = true;
+            progressText.textContent = `⏳ Traitement long en cours... (${Math.round((Date.now() - startTime) / 1000)}s écoulées)`;
+            
+            // Afficher info additionnelle
+            const warningDiv = document.createElement('div');
+            warningDiv.className = 'processing-info';
+            warningDiv.innerHTML = `
+                ⚠️ <strong>Traitement de gros fichier en cours</strong><br>
+                Cela peut prendre plusieurs minutes selon la taille (${fileSizeMB.toFixed(1)} MB).<br>
+                <small>Le serveur traite ${fileSizeMB > 50 ? '50 000 lignes maximum' : 'toutes les lignes'} pour optimiser les performances.</small>
+            `;
+            errorContainer.appendChild(warningDiv);
+        }
+    }, timeoutMs / 2);
+    
+    const timeoutId = setTimeout(() => {
+        controller.abort();
+    }, timeoutMs);
     
     fetch('data.php', {
         method: 'POST',
@@ -83,18 +143,54 @@ document.getElementById('upload-form').addEventListener('submit', function(event
         signal: controller.signal
     })
     .then(response => {
+        console.log('Response status:', response.status, response.statusText);
+        
+        if (!response.ok) {
+            throw new Error(`Erreur serveur: ${response.status} ${response.statusText}`);
+        }
+        
         return response.text().then(text => {
-            console.log('Raw response:', text);
+            console.log('Raw response length:', text.length);
+            console.log('Raw response preview:', text.substring(0, 200));
+            
+            if (!text.trim()) {
+                throw new Error('Réponse serveur vide - vérifiez la configuration PHP');
+            }
+            
             try {
                 return JSON.parse(text);
             } catch (e) {
                 console.error('JSON Parse Error:', e);
-                throw new Error('Réponse serveur invalide: ' + text);
+                console.error('Response text:', text);
+                
+                // Vérifier si c'est une erreur de limite PHP
+                if (text.includes('POST Content-Length') && text.includes('exceeds the limit')) {
+                    const match = text.match(/(\d+) bytes exceeds the limit of (\d+) bytes/);
+                    if (match) {
+                        const sentMB = (parseInt(match[1]) / (1024*1024)).toFixed(1);
+                        const limitMB = (parseInt(match[2]) / (1024*1024)).toFixed(1);
+                        throw new Error(`Fichier trop volumineux: ${sentMB}MB envoyé, limite: ${limitMB}MB. Redémarrez le serveur avec: php -c php.ini -S localhost:8000`);
+                    }
+                    throw new Error('Fichier trop volumineux - vérifiez la configuration post_max_size PHP');
+                }
+                
+                // Vérifier si c'est une erreur PHP
+                if (text.includes('Fatal error') || text.includes('Parse error')) {
+                    throw new Error('Erreur PHP détectée - vérifiez les logs serveur');
+                }
+                
+                // Vérifier si c'est un timeout PHP
+                if (text.includes('maximum execution time')) {
+                    throw new Error('Timeout PHP - le fichier est trop volumineux pour les limites serveur');
+                }
+                
+                throw new Error('Réponse serveur invalide - format JSON attendu');
             }
         });
     })
     .then(json => {
         clearTimeout(timeoutId);
+        clearTimeout(warningTimeoutId);
         clearInterval(progressInterval);
         
         console.log('Parsed JSON:', json);
@@ -102,15 +198,19 @@ document.getElementById('upload-form').addEventListener('submit', function(event
             throw new Error(json.error);
         }
         
-        // Finaliser la progression
-        progressFill.style.width = '100%';
-        progressText.textContent = 'Traitement terminé !';
+        // Animation finale de progression
+        progressFill.style.width = '95%';
+        progressText.textContent = '🔄 Génération de la visualisation...';
+        
+        // Finaliser après un court délai pour l'effet visuel
+        setTimeout(() => {
+            progressFill.style.width = '100%';
+            progressText.textContent = '✅ Traitement terminé !';
+        }, 500);
         
         // Afficher les résultats
-        updateGraph(json.data || [], json.themes || {}, json.metrics?.orphan_pages || [], json.metrics?.suggestions || []);
+        updateGraph(json.data || [], {}, json.metrics?.orphan_pages || []);
         displayMetrics(json.metrics || null);
-        displayThemes(json.themes || {});
-        displaySuggestions(json.metrics?.suggestions || []);
         
         // Message de succès avec informations détaillées
         const dataCount = json.data ? json.data.length : 0;
@@ -146,16 +246,83 @@ document.getElementById('upload-form').addEventListener('submit', function(event
     })
     .catch(error => {
         clearTimeout(timeoutId);
+        clearTimeout(warningTimeoutId);
         clearInterval(progressInterval);
         
-        console.error('Error:', error);
+        console.error('Error details:', {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+            fileSize: fileSizeMB,
+            elapsedTime: (Date.now() - startTime) / 1000
+        });
         
-        let errorMessage = error.message;
+        const elapsedTime = Math.round((Date.now() - startTime) / 1000);
+        let errorMessage = '';
+        
         if (error.name === 'AbortError') {
-            errorMessage = `Timeout: Le fichier est trop volumineux (${fileSizeMB.toFixed(1)} MB) ou le traitement a pris trop de temps. Essayez de diviser le fichier ou augmentez les limites du serveur.`;
+            errorMessage = `
+                <div class="error-details">
+                    <strong>⏱️ Timeout après ${elapsedTime}s</strong><br>
+                    Le fichier (${fileSizeMB.toFixed(1)} MB) a pris trop de temps à traiter.<br><br>
+                    
+                    <strong>Solutions possibles :</strong><br>
+                    • Diviser le fichier en parties plus petites<br>
+                    • Utiliser des filtres plus restrictifs<br>
+                    • Réessayer (le serveur peut être temporairement surchargé)<br>
+                    • Contacter l'administrateur pour augmenter les limites
+                </div>
+            `;
+        } else if (error.message === 'Failed to fetch') {
+            errorMessage = `
+                <div class="error-details">
+                    <strong>🌐 Problème de connexion réseau</strong><br>
+                    Impossible de communiquer avec le serveur.<br><br>
+                    
+                    <strong>Causes possibles :</strong><br>
+                    • Serveur PHP arrêté ou inaccessible<br>
+                    • Fichier trop volumineux (${fileSizeMB.toFixed(1)} MB) pour les limites serveur<br>
+                    • Timeout réseau ou proxy<br>
+                    • Configuration PHP incorrecte (.htaccess non supporté)<br><br>
+                    
+                    <strong>Solutions :</strong><br>
+                    • Vérifier que le serveur PHP est démarré<br>
+                    • Utiliser un fichier plus petit (&lt; 50MB) pour tester<br>
+                    • Vérifier les logs d'erreur PHP<br>
+                    • Essayer : <code>php -S localhost:8000</code>
+                </div>
+            `;
+        } else if (error.message.includes('Erreur serveur: 5')) {
+            errorMessage = `
+                <div class="error-details">
+                    <strong>🔧 Erreur serveur interne</strong><br>
+                    Le serveur a rencontré une erreur lors du traitement.<br><br>
+                    
+                    <strong>Probable :</strong><br>
+                    • Fichier trop volumineux (${fileSizeMB.toFixed(1)} MB)<br>
+                    • Limites PHP dépassées (mémoire/temps)<br>
+                    • Erreur dans le code PHP<br><br>
+                    
+                    <strong>Solutions :</strong><br>
+                    • Réduire la taille du fichier<br>
+                    • Vérifier les logs PHP<br>
+                    • Augmenter memory_limit et max_execution_time
+                </div>
+            `;
+        } else {
+            errorMessage = `
+                <div class="error-details">
+                    <strong>❌ Erreur : ${error.message}</strong><br>
+                    Temps écoulé: ${elapsedTime}s | Taille: ${fileSizeMB.toFixed(1)} MB<br><br>
+                    
+                    <strong>Diagnostic :</strong><br>
+                    Ouvrez la console développeur (F12) pour plus de détails.<br>
+                    Vérifiez l'onglet Réseau pour voir les requêtes.
+                </div>
+            `;
         }
         
-        errorContainer.innerHTML = `<p>❌ ${errorMessage}</p>`;
+        errorContainer.innerHTML = `<div class="error-message">${errorMessage}</div>`;
         progressContainer.classList.add('hidden');
     })
     .finally(() => {
@@ -176,6 +343,88 @@ document.getElementById('content-only').addEventListener('change', function() {
     const excludeOptions = document.querySelectorAll('input[name="excluded_zones"], #excluded-selectors');
     excludeOptions.forEach(input => {
         input.disabled = this.checked;
+    });
+});
+
+// Fonction de test du serveur
+document.getElementById('test-server').addEventListener('click', function() {
+    const errorContainer = document.getElementById('error-container');
+    const testButton = this;
+    
+    testButton.disabled = true;
+    testButton.textContent = '🔍 Test en cours...';
+    errorContainer.innerHTML = '<div class="processing-info">🔧 Test de connexion serveur...</div>';
+    
+    // Test 1: Vérifier si le serveur répond
+    fetch('data.php', {
+        method: 'GET',
+        cache: 'no-cache'
+    })
+    .then(response => {
+        console.log('Server test - Status:', response.status);
+        return response.text();
+    })
+    .then(text => {
+        console.log('Server test - Response:', text.substring(0, 200));
+        
+        // Test réussi
+        let testResult = `
+            <div class="processing-info">
+                ✅ <strong>Serveur accessible</strong><br>
+                Status: OK | Réponse reçue (${text.length} caractères)<br><br>
+                
+                <strong>Configuration détectée :</strong><br>
+        `;
+        
+        try {
+            const data = JSON.parse(text);
+            testResult += `• Format JSON: ✅<br>`;
+            testResult += `• Données: ${data.data ? data.data.length + ' liens' : 'Aucune donnée'}<br>`;
+        } catch (e) {
+            testResult += `• Format JSON: ❌ (${e.message})<br>`;
+        }
+        
+        testResult += `• Taille réponse: ${(text.length / 1024).toFixed(2)} KB<br>`;
+        testResult += `</div>`;
+        
+        errorContainer.innerHTML = testResult;
+    })
+    .catch(error => {
+        console.error('Server test failed:', error);
+        
+        let diagnosticResult = `
+            <div class="error-message">
+                <div class="error-details">
+                    <strong>❌ Test serveur échoué</strong><br>
+                    Erreur: ${error.message}<br><br>
+                    
+                    <strong>Diagnostic :</strong><br>
+        `;
+        
+        if (error.message === 'Failed to fetch') {
+            diagnosticResult += `
+                    • Le serveur PHP n'est pas démarré<br>
+                    • Port 8000 non accessible<br>
+                    • Firewall bloquant la connexion<br><br>
+                    
+                    <strong>Solutions :</strong><br>
+                    1. Redémarrer le serveur: <code>php -S localhost:8000</code><br>
+                    2. Vérifier l'URL: <a href="http://localhost:8000/data.php" target="_blank">http://localhost:8000/data.php</a><br>
+                    3. Vérifier les processus: <code>netstat -an | grep 8000</code>
+            `;
+        } else {
+            diagnosticResult += `
+                    • Erreur réseau ou configuration<br>
+                    • Voir console développeur pour détails
+            `;
+        }
+        
+        diagnosticResult += `</div></div>`;
+        errorContainer.innerHTML = diagnosticResult;
+    })
+    .finally(() => {
+        testButton.disabled = false;
+        testButton.textContent = '🔍 Tester le Serveur';
     });
 });
 

@@ -299,12 +299,35 @@ function calculateMeshQuality($data, $themes) {
 
 $method = $_SERVER['REQUEST_METHOD'];
 
-// Configuration pour gros fichiers
-ini_set('memory_limit', '1024M');
-ini_set('max_execution_time', 300);
-ini_set('max_input_time', 300);
+// Configuration pour gros fichiers - À FAIRE AVANT TOUT AUTRE CODE
+ini_set('memory_limit', '2048M');
+ini_set('max_execution_time', 600);
+ini_set('max_input_time', 600);
 ini_set('upload_max_filesize', '500M');
 ini_set('post_max_size', '500M');
+ini_set('max_input_vars', 50000);
+
+// Vérifier si les limites ont été correctement appliquées
+if ($_SERVER['CONTENT_LENGTH'] ?? 0 > 0) {
+    $postMaxSize = ini_get('post_max_size');
+    $contentLength = $_SERVER['CONTENT_LENGTH'];
+    
+    // Convertir post_max_size en bytes pour comparaison
+    $postMaxBytes = (int)$postMaxSize;
+    if (stripos($postMaxSize, 'M') !== false) {
+        $postMaxBytes = (int)$postMaxSize * 1024 * 1024;
+    }
+    
+    if ($contentLength > $postMaxBytes) {
+        sendJsonResponse([
+            'error' => sprintf(
+                'Fichier trop volumineux: %.1f MB envoyé, limite: %.1f MB. Augmentez post_max_size dans la configuration PHP.',
+                $contentLength / (1024*1024),
+                $postMaxBytes / (1024*1024)
+            )
+        ], 413);
+    }
+}
 
 // Debug: log des erreurs
 ini_set('log_errors', 1);

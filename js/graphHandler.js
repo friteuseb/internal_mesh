@@ -468,8 +468,8 @@ function showContextMenu(x, y, nodeData) {
     
     // Calculer les dimensions du menu et de la fenêtre
     const menuRect = menu.getBoundingClientRect();
-    const menuWidth = menuRect.width || 150; // fallback si pas encore calculé
-    const menuHeight = menuRect.height || 200; // fallback
+    const menuWidth = menuRect.width || 180; // fallback correspondant au CSS
+    const menuHeight = menuRect.height || 160; // fallback plus réaliste pour 4 items + divider
     
     const windowWidth = window.innerWidth;
     const windowHeight = window.innerHeight;

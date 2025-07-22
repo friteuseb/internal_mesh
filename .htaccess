@@ -1,10 +1,11 @@
 # Configuration pour gros fichiers CSV
 php_value upload_max_filesize 500M
 php_value post_max_size 500M
-php_value max_execution_time 300
-php_value max_input_time 300
-php_value memory_limit 1024M
-php_value max_input_vars 10000
+php_value max_execution_time 600
+php_value max_input_time 600
+php_value memory_limit 2048M
+php_value max_input_vars 50000
+php_value max_file_uploads 20
 
 # Compression
 <IfModule mod_deflate.c>
