@@ -1,12 +1,20 @@
 import { getLastSection, getColor, drag, removeNodesInQueue, updateTable } from './nodeHandler.js';
 
 let currentData = [];
-let nodeSpacing = 150; // Default link distance
-let repulsionForce = -100; // Default repulsion force
-let collisionRadius = 10; // Default collision radius
+let currentThemes = {};
+let currentOrphanPages = [];
+let currentSuggestions = [];
+let nodeSpacing = 150;
+let repulsionForce = -100;
+let collisionRadius = 10;
+let colorByTheme = false;
+let selectedNode = null;
 
-export function updateGraph(data) {
+export function updateGraph(data, themes = {}, orphanPages = [], suggestions = []) {
     currentData = data;
+    currentThemes = themes;
+    currentOrphanPages = orphanPages;
+    currentSuggestions = suggestions;
 
     if (!Array.isArray(data)) {
         console.error('Data is not an array:', data);
@@ -19,6 +27,18 @@ export function updateGraph(data) {
     nodes.forEach(node => {
         node.incoming = links.filter(link => link.target === node.id).length;
         node.outgoing = links.filter(link => link.source === node.id).length;
+        
+        // Assigner une thématique basée sur l'URL
+        try {
+            const url = new URL(node.id);
+            const pathSegments = url.pathname.split('/').filter(s => s.length > 0);
+            node.theme = pathSegments.length > 0 ? pathSegments[0] : 'root';
+        } catch (e) {
+            node.theme = 'unknown';
+        }
+        
+        // Marquer les pages orphelines
+        node.isOrphan = currentOrphanPages.some(orphan => orphan.url === node.id);
     });
 
     const width = document.getElementById('chart').clientWidth;
@@ -26,13 +46,20 @@ export function updateGraph(data) {
 
     const svg = d3.select('#chart').html("").append('svg')
         .attr('width', width)
-        .attr('height', height)
-        .call(d3.zoom().on('zoom', (event) => {
-            svg.attr('transform', event.transform);
-        }))
-        .append('g');
+        .attr('height', height);
+    
+    const g = svg.append('g');
+    
+    // Zoom configuration
+    const zoom = d3.zoom()
+        .scaleExtent([0.1, 4])
+        .on('zoom', (event) => {
+            g.attr('transform', event.transform);
+        });
+    
+    svg.call(zoom);
 
-    svg.append('defs').selectAll('marker')
+    g.append('defs').selectAll('marker')
         .data(['end'])
         .enter().append('marker')
         .attr('id', 'end')
@@ -54,29 +81,41 @@ export function updateGraph(data) {
         .force('x', d3.forceX(width / 2).strength(0.05))
         .force('y', d3.forceY(height / 2).strength(0.05));
 
-    const link = svg.append('g')
+    const link = g.append('g')
         .selectAll('line')
         .data(links)
         .enter().append('line')
-        .attr('stroke-width', 1) // Reduced thickness
+        .attr('stroke-width', 1)
         .attr('stroke', '#00d4ff')
-        .attr('opacity', 0.3) // Reduced opacity
+        .attr('opacity', 0.3)
         .attr('marker-end', 'url(#end)');
 
-    const node = svg.append('g')
+    const node = g.append('g')
         .selectAll('circle')
         .data(nodes)
         .enter().append('circle')
         .attr('r', d => Math.max(5, Math.sqrt(d.incoming) * 5))
-        .attr('fill', d => `rgba(0, 212, 255, 0.7)`)
-        .attr('stroke', '#0078ff')
+        .attr('fill', d => colorByTheme ? getThemeColor(d.theme) : `rgba(0, 212, 255, 0.7)`)
+        .attr('stroke', d => colorByTheme ? d3.color(getThemeColor(d.theme)).darker() : '#0078ff')
         .attr('stroke-width', 1.5)
-        .call(drag(simulation));
+        .attr('class', d => d.isOrphan ? 'orphan-node' : '')
+        .style('cursor', 'pointer')
+        .style('pointer-events', 'all')
+        .call(drag(simulation))
+        .on('click', function(event, d) {
+            event.stopPropagation();
+            handleNodeClick(event, d);
+        })
+        .on('contextmenu', function(event, d) {
+            event.preventDefault();
+            event.stopPropagation();
+            handleNodeRightClick(event, d);
+        });
 
     node.append('title')
         .text(d => getLastSection(d.id));
 
-    const labels = svg.append('g')
+    const labels = g.append('g')
         .selectAll('text')
         .data(nodes)
         .enter().append('text')
@@ -84,6 +123,7 @@ export function updateGraph(data) {
         .attr('text-anchor', 'middle')
         .attr('font-size', 12)
         .attr('fill', '#f0f0f0')
+        .style('pointer-events', 'none')
         .text(d => getLastSection(d.id));
 
     simulation.on('tick', () => {
@@ -181,21 +221,50 @@ export function updateGraph(data) {
     // Add event listeners for control inputs
     document.getElementById('link-distance').addEventListener('input', (event) => {
         nodeSpacing = +event.target.value;
-        updateGraph(currentData);
+        updateGraph(currentData, currentThemes, currentOrphanPages, currentSuggestions);
     });
 
     document.getElementById('repulsion-force').addEventListener('input', (event) => {
         repulsionForce = +event.target.value;
-        updateGraph(currentData);
+        updateGraph(currentData, currentThemes, currentOrphanPages, currentSuggestions);
     });
 
     document.getElementById('collision-radius').addEventListener('input', (event) => {
         collisionRadius = +event.target.value;
-        updateGraph(currentData);
+        updateGraph(currentData, currentThemes, currentOrphanPages, currentSuggestions);
     });
+    
+    // Setup context menu event listeners
+    setupContextMenuListeners();
 
     // Add event listener for PDF generation
     document.getElementById('download-pdf').addEventListener('click', generatePDF);
+    
+    // Add event listener for theme coloring
+    document.getElementById('color-by-theme').addEventListener('change', (event) => {
+        colorByTheme = event.target.checked;
+        updateGraph(currentData, currentThemes, currentOrphanPages, currentSuggestions);
+    });
+    
+    // Masquer le menu contextuel au clic sur le document
+    document.addEventListener('click', hideContextMenu);
+    
+    // Permettre le clic dans la zone vide du SVG pour désélectionner
+    svg.on('click', function(event) {
+        // Vérifier si le clic est sur le fond du SVG
+        if (event.target === this || event.target.tagName === 'svg') {
+            hideContextMenu();
+            clearHighlights();
+        }
+    });
+    
+    // Désactiver le menu contextuel par défaut sur le conteneur chart
+    document.getElementById('chart').addEventListener('contextmenu', function(event) {
+        // Ne pas empêcher si c'est sur un nœud
+        if (!event.target.closest('circle')) {
+            event.preventDefault();
+        }
+    });
 }
 
 function generatePDF() {
@@ -230,6 +299,342 @@ function generatePDF() {
         document.body.classList.remove('pdf-style'); // Remove PDF styles in case of error
     });
 }
+// Fonction pour obtenir une couleur par thématique
+function getThemeColor(theme) {
+    const colors = {
+        'our-articles': '#00d4ff',
+        'customize': '#ff6b35',
+        'root': '#00ff88',
+        'blog': '#ff4081',
+        'news': '#ffeb3b',
+        'products': '#9c27b0',
+        'services': '#4caf50',
+        'about': '#ff9800',
+        'contact': '#795548'
+    };
+    return colors[theme] || '#00d4ff';
+}
+
+// Fonction pour afficher les métriques
+export function displayMetrics(metrics) {
+    const container = document.getElementById('metrics-display');
+    if (!metrics) {
+        container.innerHTML = '<p>Aucune métrique disponible</p>';
+        return;
+    }
+    
+    container.innerHTML = `
+        <div class="metric-card">
+            <h4>Liens Totaux</h4>
+            <div class="metric-value">${metrics.total_links}</div>
+        </div>
+        <div class="metric-card">
+            <h4>Pages Totales</h4>
+            <div class="metric-value">${metrics.total_pages}</div>
+        </div>
+        <div class="metric-card">
+            <h4>Densité de Liens</h4>
+            <div class="metric-value">${metrics.link_density}</div>
+        </div>
+        <div class="metric-card">
+            <h4>Thématiques</h4>
+            <div class="metric-value">${metrics.theme_count}</div>
+        </div>
+        <div class="metric-card">
+            <h4>Équilibrage Thématique</h4>
+            <div class="metric-value">${metrics.theme_balance}</div>
+        </div>
+    `;
+}
+
+// Fonction pour afficher l'analyse thématique
+export function displayThemes(themes) {
+    const container = document.getElementById('themes-display');
+    if (!themes || Object.keys(themes).length === 0) {
+        container.innerHTML = '<p>Aucune analyse thématique disponible</p>';
+        return;
+    }
+    
+    let html = '';
+    Object.entries(themes).forEach(([theme, data]) => {
+        const totalLinks = data.internal_links + data.external_links;
+        const pagesPreview = data.pages.slice(0, 3).map(url => {
+            try {
+                const urlObj = new URL(url);
+                return urlObj.pathname.split('/').pop() || 'index';
+            } catch (e) {
+                return url.split('/').pop() || url;
+            }
+        }).join(', ');
+        
+        html += `
+            <div class="theme-card">
+                <h4>${theme}</h4>
+                <div class="theme-stats">
+                    <span>Pages: ${data.pages.length}</span>
+                    <span>Liens: ${totalLinks}</span>
+                </div>
+                <div class="theme-stats">
+                    <span>Internes: ${data.internal_links}</span>
+                    <span>Externes: ${data.external_links}</span>
+                </div>
+                <div class="theme-pages">
+                    ${pagesPreview}${data.pages.length > 3 ? '...' : ''}
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+// Fonction pour afficher les suggestions
+export function displaySuggestions(suggestions) {
+    const container = document.getElementById('suggestions-container');
+    const display = document.getElementById('suggestions-display');
+    
+    if (!suggestions || suggestions.length === 0) {
+        container.classList.add('hidden');
+        return;
+    }
+    
+    container.classList.remove('hidden');
+    
+    let html = '';
+    suggestions.forEach((suggestion, index) => {
+        const priorityClass = suggestion.priority === 'high' ? 'high-priority' : 'medium-priority';
+        html += `
+            <div class="suggestion-card ${priorityClass}">
+                <h5>${suggestion.title}</h5>
+                <div class="suggestion-details">${suggestion.description}</div>
+                <div class="suggestion-details"><strong>Action:</strong> ${suggestion.action}</div>
+                <button class="suggestion-action" onclick="implementSuggestion(${index})">
+                    Implémenter
+                </button>
+            </div>
+        `;
+    });
+    
+    display.innerHTML = html;
+}
+
+// Gestion des interactions de nœuds
+function handleNodeClick(event, d) {
+    if (event.ctrlKey || event.metaKey) {
+        // Ctrl+Clic pour ouvrir la page
+        window.open(d.id, '_blank');
+        showNotification('Page ouverte dans un nouvel onglet', 'success');
+    } else {
+        // Clic simple pour sélectionner
+        selectedNode = d;
+        highlightNodeConnections(d);
+    }
+}
+
+function handleNodeRightClick(event, d) {
+    event.preventDefault();
+    event.stopPropagation();
+    selectedNode = d;
+    
+    // Utiliser les coordonnées de l'événement source pour avoir la position exacte
+    const sourceEvent = event.sourceEvent || event;
+    let x, y;
+    
+    if (sourceEvent.pageX && sourceEvent.pageY) {
+        // Utiliser pageX/pageY si disponible (le plus fiable)
+        x = sourceEvent.pageX;
+        y = sourceEvent.pageY;
+    } else if (sourceEvent.clientX && sourceEvent.clientY) {
+        // Sinon utiliser clientX/clientY
+        x = sourceEvent.clientX + window.scrollX;
+        y = sourceEvent.clientY + window.scrollY;
+    } else {
+        // Fallback : calculer depuis le conteneur
+        const rect = document.getElementById('chart').getBoundingClientRect();
+        x = rect.left + (sourceEvent.offsetX || 0) + window.scrollX;
+        y = rect.top + (sourceEvent.offsetY || 0) + window.scrollY;
+    }
+    
+    console.log('Menu contextuel position:', { x, y, event: sourceEvent });
+    showContextMenu(x, y, d);
+}
+
+function showContextMenu(x, y, nodeData) {
+    const menu = document.getElementById('context-menu');
+    
+    // Rendre le menu visible pour calculer ses dimensions
+    menu.style.display = 'block';
+    menu.style.position = 'absolute';
+    
+    // Calculer les dimensions du menu et de la fenêtre
+    const menuRect = menu.getBoundingClientRect();
+    const menuWidth = menuRect.width || 150; // fallback si pas encore calculé
+    const menuHeight = menuRect.height || 200; // fallback
+    
+    const windowWidth = window.innerWidth;
+    const windowHeight = window.innerHeight;
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    
+    // Ajuster la position si le menu dépasse les bords
+    let adjustedX = x;
+    let adjustedY = y;
+    
+    // Vérifier le débordement horizontal
+    if (x + menuWidth > windowWidth + scrollX) {
+        adjustedX = x - menuWidth;
+    }
+    
+    // Vérifier le débordement vertical
+    if (y + menuHeight > windowHeight + scrollY) {
+        adjustedY = y - menuHeight;
+    }
+    
+    // S'assurer que le menu reste dans les limites minimales
+    adjustedX = Math.max(scrollX + 5, adjustedX);
+    adjustedY = Math.max(scrollY + 5, adjustedY);
+    
+    menu.style.left = adjustedX + 'px';
+    menu.style.top = adjustedY + 'px';
+    
+    // Stocker les données du nœud pour les actions du menu
+    menu.setAttribute('data-node-id', nodeData.id);
+    
+    console.log('Menu positionné à:', { 
+        original: { x, y }, 
+        adjusted: { x: adjustedX, y: adjustedY },
+        menuSize: { width: menuWidth, height: menuHeight }
+    });
+}
+
+function hideContextMenu() {
+    const menu = document.getElementById('context-menu');
+    menu.style.display = 'none';
+}
+
+function setupContextMenuListeners() {
+    document.getElementById('open-page').addEventListener('click', () => {
+        if (selectedNode) {
+            window.open(selectedNode.id, '_blank');
+            showNotification('Page ouverte dans un nouvel onglet', 'success');
+        }
+        hideContextMenu();
+    });
+    
+    document.getElementById('delete-node').addEventListener('click', () => {
+        if (selectedNode) {
+            deleteNodeAndLinks(selectedNode.id);
+            showNotification('Nœud supprimé', 'success');
+        }
+        hideContextMenu();
+    });
+    
+    document.getElementById('focus-node').addEventListener('click', () => {
+        if (selectedNode) {
+            focusOnNode(selectedNode);
+        }
+        hideContextMenu();
+    });
+    
+    document.getElementById('show-connections').addEventListener('click', () => {
+        if (selectedNode) {
+            highlightNodeConnections(selectedNode);
+        }
+        hideContextMenu();
+    });
+}
+
+function deleteNodeAndLinks(nodeId) {
+    // Filtrer les liens qui impliquent ce nœud
+    const filteredData = currentData.filter(link => 
+        link.Source !== nodeId && link.Destination !== nodeId
+    );
+    
+    // Mettre à jour le graphique
+    updateGraph(filteredData, currentThemes, currentOrphanPages, currentSuggestions);
+    currentData = filteredData;
+}
+
+function focusOnNode(nodeData) {
+    // Filtrer pour ne montrer que les liens de ce nœud
+    const nodeLinks = currentData.filter(link => 
+        link.Source === nodeData.id || link.Destination === nodeData.id
+    );
+    updateGraph(nodeLinks, currentThemes, currentOrphanPages, currentSuggestions);
+}
+
+function highlightNodeConnections(nodeData) {
+    // Mettre en évidence les connexions du nœud
+    d3.selectAll('line')
+        .style('opacity', d => 
+            (d.source.id === nodeData.id || d.target.id === nodeData.id) ? 1 : 0.1
+        )
+        .style('stroke-width', d => 
+            (d.source.id === nodeData.id || d.target.id === nodeData.id) ? 3 : 1
+        );
+    
+    d3.selectAll('circle')
+        .style('opacity', d => 
+            (d.id === nodeData.id || isConnectedTo(d.id, nodeData.id)) ? 1 : 0.3
+        );
+}
+
+function isConnectedTo(nodeId1, nodeId2) {
+    return currentData.some(link => 
+        (link.Source === nodeId1 && link.Destination === nodeId2) ||
+        (link.Source === nodeId2 && link.Destination === nodeId1)
+    );
+}
+
+function clearHighlights() {
+    // Remettre l'opacité normale pour tous les éléments
+    d3.selectAll('line')
+        .style('opacity', 0.3)
+        .style('stroke-width', 1);
+    
+    d3.selectAll('circle')
+        .style('opacity', 1);
+        
+    selectedNode = null;
+}
+
+function showNotification(message, type = 'info') {
+    const notificationArea = document.getElementById('notification-area');
+    if (!notificationArea) {
+        console.warn('Notification area not found');
+        return;
+    }
+    
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
+    
+    notificationArea.appendChild(notification);
+    
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 3000);
+}
+
+// Fonction globale pour implémenter les suggestions
+window.implementSuggestion = function(index) {
+    const suggestion = currentSuggestions[index];
+    if (!suggestion) return;
+    
+    switch (suggestion.type) {
+        case 'connect_orphan':
+            showNotification(`Suggestion: Connecter ${suggestion.target_url} depuis ${suggestion.source_urls.join(', ')}`, 'info');
+            break;
+        case 'strengthen_theme':
+            showNotification(`Suggestion: Renforcer les liens dans le thème ${suggestion.theme}`, 'info');
+            break;
+        default:
+            showNotification('Suggestion notée', 'success');
+    }
+};
+
 // tout supprimer pour effacer les traces après utilisation
 document.getElementById('clear-all').addEventListener('click', () => {
     if (confirm('Êtes-vous sûr de vouloir tout effacer ?')) {
@@ -242,7 +647,10 @@ document.getElementById('clear-all').addEventListener('click', () => {
         .then(json => {
             if (json.success) {
                 alert('Tous les nœuds ont été effacés.');
-                updateGraph([]);
+                updateGraph([], {}, [], []);
+                displayMetrics(null);
+                displayThemes({});
+                displaySuggestions([]);
             } else {
                 alert('Erreur lors de la suppression des nœuds.');
             }

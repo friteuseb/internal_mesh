@@ -20,6 +20,9 @@ export function drag(simulation) {
         if (!event.active) simulation.alphaTarget(0.3).restart();
         d.fx = d.x;
         d.fy = d.y;
+        
+        // Empêcher le zoom pendant le drag
+        event.sourceEvent.stopPropagation();
     }
 
     function dragged(event, d) {

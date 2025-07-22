@@ -12,10 +12,67 @@
         <h1>Visualisation du Maillage Interne</h1>
         <form id="upload-form" enctype="multipart/form-data">
             <input type="file" name="csv-file" accept=".csv" required class="styled-button">
+            
+            <!-- Configuration des filtres -->
+            <div class="filter-config">
+                <h3>Configuration des Filtres</h3>
+                
+                <div class="filter-section">
+                    <label>
+                        <input type="checkbox" id="content-only" name="content_only">
+                        Mode strict : Liens "Content" uniquement
+                    </label>
+                </div>
+                
+                <div class="filter-section">
+                    <label>Zones à exclure :</label>
+                    <div class="checkbox-group">
+                        <label><input type="checkbox" name="excluded_zones" value="Header" checked> Header</label>
+                        <label><input type="checkbox" name="excluded_zones" value="Footer" checked> Footer</label>
+                        <label><input type="checkbox" name="excluded_zones" value="Navigation" checked> Navigation</label>
+                        <label><input type="checkbox" name="excluded_zones" value="Sidebar"> Sidebar</label>
+                        <label><input type="checkbox" name="excluded_zones" value="Widget"> Widget</label>
+                    </div>
+                </div>
+                
+                <div class="filter-section">
+                    <label>Sélecteurs CSS à exclure :</label>
+                    <textarea id="excluded-selectors" name="excluded_selectors" placeholder="header, footer, nav, .navbar, .menu, .navigation, .breadcrumb, .pagination, .sidebar, .widget"></textarea>
+                </div>
+                
+                <button type="button" id="toggle-filters" class="styled-button">Masquer/Afficher Filtres</button>
+            </div>
+            
             <input type="submit" value="Télécharger et Traiter" class="styled-button">
         </form>
         <!-- Conteneur pour les messages d'erreur -->
         <div id="error-container" class="error-message"></div>
+        
+        <!-- Barre de progression -->
+        <div id="progress-container" class="hidden">
+            <div class="progress-bar">
+                <div id="progress-fill" class="progress-fill"></div>
+            </div>
+            <div id="progress-text">Traitement en cours...</div>
+        </div>
+
+        <!-- Métriques de qualité du maillage -->
+        <div id="metrics-container">
+            <h2>Métriques de Qualité du Maillage</h2>
+            <div id="metrics-display"></div>
+        </div>
+
+        <!-- Analyse thématique -->
+        <div id="themes-container">
+            <h2>Analyse Thématique</h2>
+            <div id="themes-display"></div>
+        </div>
+
+        <!-- Suggestions d'amélioration -->
+        <div id="suggestions-container" class="hidden">
+            <h2>💡 Suggestions d'Amélioration du Maillage</h2>
+            <div id="suggestions-display"></div>
+        </div>
 
         <div id="chart-container">
             <h2>Visualisation des Liens</h2>
@@ -32,6 +89,10 @@
                 <div class="control-group">
                     <label for="collision-radius">Rayon de collision</label>
                     <input type="range" id="collision-radius" min="5" max="50" value="10">
+                </div>
+                <div class="control-group">
+                    <label for="color-by-theme">Colorer par thématique</label>
+                    <input type="checkbox" id="color-by-theme">
                 </div>
             </div>
         </div>
@@ -58,6 +119,18 @@
         </div>
         <button id="download-pdf" class="styled-button">Télécharger PDF</button>
     </div>
+
+    <!-- Menu contextuel -->
+    <div id="context-menu" class="context-menu">
+        <button class="context-menu-item" id="open-page">🔗 Ouvrir la page</button>
+        <button class="context-menu-item" id="delete-node">🗑️ Supprimer le nœud</button>
+        <div class="context-menu-divider"></div>
+        <button class="context-menu-item" id="focus-node">🎯 Focus sur ce nœud</button>
+        <button class="context-menu-item" id="show-connections">🔍 Voir les connexions</button>
+    </div>
+
+    <!-- Zone de notifications -->
+    <div id="notification-area"></div>
     <!-- Ajout de la bibliothèque D3.js -->
     <script src="https://d3js.org/d3.v6.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>

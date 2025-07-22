@@ -1,0 +1,22 @@
+# Configuration pour gros fichiers CSV
+php_value upload_max_filesize 500M
+php_value post_max_size 500M
+php_value max_execution_time 300
+php_value max_input_time 300
+php_value memory_limit 1024M
+php_value max_input_vars 10000
+
+# Compression
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/css
+    AddOutputFilterByType DEFLATE application/javascript
+    AddOutputFilterByType DEFLATE text/html
+    AddOutputFilterByType DEFLATE application/json
+</IfModule>
+
+# Cache
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+</IfModule>
